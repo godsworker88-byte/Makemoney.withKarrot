@@ -555,6 +555,19 @@ async function genImages(p,out){
     renderImgSet(p,out,results, colors.map(c=>c.name).filter(Boolean));
   }catch(e){ out.innerHTML='<div class="hint mt">생성 실패: '+esc(e.message||String(e))+'</div>'; }
 }
+// 생성 이미지 전체를 한 번에 저장 (모바일: 공유 시트로 '사진에 저장', 안 되면 개별 다운로드)
+async function saveAll(results, btn){
+  const files = results.map(r=> new File([r.blob], r.name+'.jpg', {type:'image/jpeg'}));
+  if(navigator.canShare && navigator.canShare({files})){
+    try{ await navigator.share({files, title:'다인마켓 이미지'}); return; }
+    catch(e){ if(e && e.name==='AbortError') return; }
+  }
+  // 대체: 개별 다운로드(브라우저가 '여러 파일 다운로드' 허용을 물어볼 수 있어요)
+  const old=btn?btn.textContent:''; if(btn){btn.textContent='저장 중...';btn.disabled=true;}
+  for(const r of results){ const u=URL.createObjectURL(r.blob); const a=document.createElement('a'); a.href=u; a.download=r.name+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); await new Promise(s=>setTimeout(s,450)); URL.revokeObjectURL(u); }
+  if(btn){btn.textContent=old;btn.disabled=false;}
+  toast(results.length+'장 저장(다운로드)했어요');
+}
 function renderImgSet(p,out,results,colorNames){
   out.innerHTML=''; const wrap=document.createElement('div'); wrap.className='card'; wrap.style.marginTop='8px'; wrap.style.background='var(--bg)';
   const head=document.createElement('div'); head.className='hint'; head.style.fontWeight='600'; head.style.marginBottom='8px';
@@ -563,8 +576,8 @@ function renderImgSet(p,out,results,colorNames){
   const grid=document.createElement('div'); grid.className='gal'; wrap.appendChild(grid);
   results.forEach(r=>{ const url=URL.createObjectURL(r.blob); const cell=document.createElement('div'); cell.className='cell sel'; cell.innerHTML='<img src="'+url+'">'; cell.title=r.name;
     cell.onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=r.name+'.jpg'; a.click(); toast('저장: '+r.name); }; grid.appendChild(cell); });
-  const note=document.createElement('div'); note.className='hint mt'; note.textContent='이미지를 탭하면 1장씩 저장돼요. 아래는 전체 ZIP.'; wrap.appendChild(note);
-  const z=document.createElement('button'); z.className='btn mt'; z.textContent='전체 ZIP 다운로드'; z.onclick=async ()=>{ const zip=new JSZip(); results.forEach(r=>zip.file(r.name+'.jpg',r.blob)); const o=await zip.generateAsync({type:'blob'}); const a=document.createElement('a'); a.href=URL.createObjectURL(o); a.download=(p.name||'product').replace(/[\\/:*?"<>|]/g,'_').slice(0,30)+'_이미지세트.zip'; a.click(); toast('ZIP 저장 완료'); };
+  const note=document.createElement('div'); note.className='hint mt'; note.textContent='이미지를 탭하면 1장씩 저장돼요. 아래 버튼으로 전체 한 번에 저장.'; wrap.appendChild(note);
+  const z=document.createElement('button'); z.className='btn mt'; z.textContent='📥 전체 이미지 저장'; z.onclick=()=>saveAll(results, z);
   wrap.appendChild(z); out.appendChild(wrap);
 }
 
