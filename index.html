@@ -362,7 +362,9 @@ function renderProducts(){
         <button class="ghost sm" data-sell="${p.id}" style="flex:1">판매 등록 →</button>
       </div>
       <button class="btn sm" data-gen="${p.id}" style="width:100%;margin-top:8px">✨ 제목·상세설명 생성</button>
-      <div data-genout="${p.id}"></div>`;
+      <div data-genout="${p.id}"></div>
+      <button class="ghost sm" data-genimg="${p.id}" style="width:100%;margin-top:8px">🖼️ 이미지 세트 생성 (색상별·디테일·광고형·모델)</button>
+      <div data-imgout="${p.id}"></div>`;
     box.appendChild(c);
   });
   const updateCalc=(p)=>{ const el=box.querySelector(`[data-calc="${p.id}"]`); if(!el)return;
@@ -379,6 +381,7 @@ function renderProducts(){
     $('s-name').value=p.name; $('s-price').value=num(p.sell)||''; $('s-cost').value=num(p.buy)||''; $('s-ship').value=num(p.ship)||''; $('s-date').value=today(); salesPreview();
     document.querySelector('.tabbar button[data-tab="sales"]').click(); toast('판매 입력에 채웠어요'); });
   box.querySelectorAll('[data-gen]').forEach(b=>b.onclick=()=>genListing(products.find(x=>x.id===b.dataset.gen), box.querySelector(`[data-genout="${b.dataset.gen}"]`)));
+  box.querySelectorAll('[data-genimg]').forEach(b=>b.onclick=()=>genImages(products.find(x=>x.id===b.dataset.genimg), box.querySelector(`[data-imgout="${b.dataset.genimg}"]`)));
   products.forEach(p=>{ if(p.gen) renderGen(p, box.querySelector(`[data-genout="${p.id}"]`)); });
   box.querySelectorAll('[data-imgs]').forEach(b=>b.onclick=async ()=>{ const p=products.find(x=>x.id===b.dataset.imgs); if(!p||!p.images?.length){toast('저장된 사진이 없어요');return;}
     b.textContent='⏳...'; b.disabled=true;
@@ -463,6 +466,86 @@ function renderGen(p,out){ const g=p.gen||{};
   $('gtc-'+p.id).onclick=()=>copyText(g.title||'');
   $('gdc-'+p.id).onclick=()=>copyText($('gd-'+p.id).value);
   $('gd-'+p.id).oninput=()=>{ p.gen.description=$('gd-'+p.id).value; saveProducts(); };
+}
+
+// ---------- 이미지 세트 생성 (AI 색상분류 + 캔버스 조합) ----------
+const CLASSIFY_PROMPT = `아래는 한 의류 상품 사진 여러 장이야(0번부터 순서대로). 각 사진을 보고 분류해 JSON으로만 답해.
+colors: 색상 그룹 배열. 각 {"name":"한글 색상명","indexes":[그 색 사진번호들],"best":대표로쓸1장번호}. 색이 하나뿐이면 1개.
+detail: 원단·포켓·지퍼·밴딩·봉제 등 클로즈업 디테일 사진 번호들.
+model: 사람이 착용한 사진 번호들.
+groupShot: 여러 색이 한 장에 같이 나온 사진 번호(없으면 -1).
+오직 JSON만: {"colors":[{"name":"","indexes":[],"best":0}],"detail":[],"model":[],"groupShot":-1}`;
+
+function loadImg(url){ return new Promise((res,rej)=>{ const im=new Image(); im.crossOrigin='anonymous'; im.onload=()=>res(im); im.onerror=()=>rej(new Error('img')); im.src=API+'/api/image?src='+encodeURIComponent(url); }); }
+function newCanvas(s){ s=s||1080; const c=document.createElement('canvas'); c.width=c.height=s; const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,s,s); return [c,x]; }
+function cover(x,im,X,Y,W,H){ const r=Math.max(W/im.width,H/im.height),w=im.width*r,h=im.height*r; x.save(); x.beginPath(); x.rect(X,Y,W,H); x.clip(); x.drawImage(im,X+(W-w)/2,Y+(H-h)/2,w,h); x.restore(); }
+function contain(x,im,X,Y,W,H){ const r=Math.min(W/im.width,H/im.height),w=im.width*r,h=im.height*r; x.drawImage(im,X+(W-w)/2,Y+(H-h)/2,w,h); }
+const toBlob=c=>new Promise(r=>c.toBlob(r,'image/jpeg',0.92));
+async function cGrid(ims){ const [c,x]=newCanvas(); const n=ims.length||1; const cols=Math.ceil(Math.sqrt(n)),rows=Math.ceil(n/cols),g=10; const cw=(1080-g*(cols+1))/cols,ch=(1080-g*(rows+1))/rows; ims.forEach((im,i)=>{ if(!im)return; const cx=i%cols,cy=Math.floor(i/cols); cover(x,im,g+cx*(cw+g),g+cy*(ch+g),cw,ch); }); return toBlob(c); }
+async function cDetail(ims){ const [c,x]=newCanvas(); const g=10,cw=(1080-g*3)/2; for(let i=0;i<4;i++){ const im=ims[i]||ims[ims.length-1]; if(!im)continue; const cx=i%2,cy=Math.floor(i/2); cover(x,im,g+cx*(cw+g),g+cy*(cw+g),cw,cw); } return toBlob(c); }
+async function cLabeled(im,label){ const [c,x]=newCanvas(); contain(x,im,10,10,1060,950); x.fillStyle='#1b1b1a'; x.fillRect(0,960,1080,120); x.fillStyle='#fff'; x.font='bold 54px -apple-system,"Apple SD Gothic Neo",sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(label||'',540,1022); return toBlob(c); }
+async function cContain(im){ const [c,x]=newCanvas(); contain(x,im,20,20,1040,1040); return toBlob(c); }
+function wrap2(x,text,X,Y,maxW,lh){ const lines=[]; let line=''; for(const ch of (text||'')){ if(x.measureText(line+ch).width>maxW){ lines.push(line); line=ch; } else line+=ch; } if(line)lines.push(line); const use=lines.slice(0,2); use.forEach((ln,i)=>x.fillText(ln,X,Y+i*lh)); return use.length; }
+async function cAd(im,title,price){ const [c,x]=newCanvas(); if(im) cover(x,im,0,0,1080,1080); else { x.fillStyle='#eee'; x.fillRect(0,0,1080,1080); }
+  const grd=x.createLinearGradient(0,540,0,1080); grd.addColorStop(0,'rgba(0,0,0,0)'); grd.addColorStop(1,'rgba(0,0,0,0.8)'); x.fillStyle=grd; x.fillRect(0,480,1080,600);
+  x.textAlign='left'; x.textBaseline='alphabetic'; x.fillStyle='#fff'; x.font='bold 58px -apple-system,"Apple SD Gothic Neo",sans-serif';
+  const nLines=wrap2(x,(title||'').replace(/^\(새상품\)\s*/,''),52,900,980,66);
+  if(price){ const pt=Number(price).toLocaleString()+'원'; x.font='bold 76px -apple-system,sans-serif'; const w=x.measureText(pt).width; const py=900+nLines*66+28; x.fillStyle='#e1251b'; x.fillRect(48,py,w+64,96); x.fillStyle='#ffd400'; x.fillText(pt,80,py+70); }
+  x.fillStyle='#ff6f3c'; x.font='bold 34px sans-serif'; x.fillText('NEW 새상품', 52, 840);
+  return toBlob(c); }
+
+async function genImages(p,out){
+  if(!p||!out) return;
+  if(!p.images||!p.images.length){ out.innerHTML='<div class="hint mt">저장된 사진이 없어요.</div>'; return; }
+  if(!aiCfg().key){ out.innerHTML='<div class="hint mt">먼저 <b>판매 탭 → ⚙ AI 설정</b>에서 Gemini 키를 입력하세요.</div>'; return; }
+  out.innerHTML='<div class="hint mt">⏳ 색상 분석 + 이미지 생성 중... (20~40초)</div>';
+  try{
+    const urls=p.images.slice(0,10);
+    // 1) AI 분류
+    const parts=[{text:CLASSIFY_PROMPT}]; for(const u of urls) parts.push(await urlToPart(u));
+    const cfg=aiCfg(); const model=cfg.model||'gemini-2.0-flash'; let data;
+    if((cfg.provider||'gemini')==='openai'){
+      const content=[{type:'text',text:CLASSIFY_PROMPT}].concat(urls.map((u,i)=>({type:'image_url',image_url:{url:'data:'+parts[i+1].inline_data.mime_type+';base64,'+parts[i+1].inline_data.data}})));
+      const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},body:JSON.stringify({model:cfg.model||'gpt-4o-mini',messages:[{role:'user',content}]})});
+      if(!r.ok) throw new Error('OpenAI '+r.status); const t=(await r.json()).choices[0].message.content||''; data=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
+    } else {
+      const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(cfg.key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{response_mime_type:'application/json'}})});
+      if(!r.ok) throw new Error('Gemini '+r.status); const j=await r.json(); const t=(((j.candidates||[])[0]||{}).content||{}).parts?.map(x=>x.text||'').join('')||''; data=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
+    }
+    // 2) 이미지 로드
+    const loaded=await Promise.all(urls.map(u=>loadImg(u).catch(()=>null)));
+    const pick=i=>(i>=0&&i<loaded.length)?loaded[i]:null;
+    const colors=(data.colors||[]).filter(c=>c&&(c.indexes?.length||c.best>=0));
+    const results=[];
+    // ① 전체컬러 모음
+    if(colors.length>=2){ const reps=colors.map(c=>pick(c.best)).filter(Boolean); if(reps.length>=2) results.push({name:'01_전체컬러모음', blob:await cGrid(reps)}); }
+    else if(data.groupShot>=0 && pick(data.groupShot)){ results.push({name:'01_전체컬러모음', blob:await cContain(pick(data.groupShot))}); }
+    // ② 컬러별
+    for(let i=0;i<colors.length;i++){ const im=pick(colors[i].best); if(im) results.push({name:'02_컬러_'+(colors[i].name||('색상'+(i+1))), blob:await cLabeled(im,colors[i].name||('색상'+(i+1)))}); }
+    // ③ 디테일 4분할
+    let det=(data.detail||[]).map(pick).filter(Boolean).slice(0,4);
+    if(det.length<2) det=loaded.filter(Boolean).slice(0,4);
+    results.push({name:'03_디테일4분할', blob:await cDetail(det)});
+    // ④ 광고형
+    const adbg=pick((data.model||[])[0]) || pick((colors[0]||{}).best) || loaded.find(Boolean);
+    results.push({name:'04_광고형', blob:await cAd(adbg, (p.gen&&p.gen.title)||p.name, num(p.sell))});
+    // ⑤ 모델형
+    const m1=pick((data.model||[])[0]) || adbg; if(m1) results.push({name:'05_모델착용', blob:await cContain(m1)});
+
+    renderImgSet(p,out,results, colors.map(c=>c.name).filter(Boolean));
+  }catch(e){ out.innerHTML='<div class="hint mt">생성 실패: '+esc(e.message||String(e))+'</div>'; }
+}
+function renderImgSet(p,out,results,colorNames){
+  out.innerHTML=''; const wrap=document.createElement('div'); wrap.className='card'; wrap.style.marginTop='8px'; wrap.style.background='var(--bg)';
+  const head=document.createElement('div'); head.className='hint'; head.style.fontWeight='600'; head.style.marginBottom='8px';
+  head.textContent='생성된 이미지 '+results.length+'장'+(colorNames&&colorNames.length?' · 색상: '+colorNames.join('/'):'');
+  wrap.appendChild(head);
+  const grid=document.createElement('div'); grid.className='gal'; wrap.appendChild(grid);
+  results.forEach(r=>{ const url=URL.createObjectURL(r.blob); const cell=document.createElement('div'); cell.className='cell sel'; cell.innerHTML='<img src="'+url+'">'; cell.title=r.name;
+    cell.onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=r.name+'.jpg'; a.click(); toast('저장: '+r.name); }; grid.appendChild(cell); });
+  const note=document.createElement('div'); note.className='hint mt'; note.textContent='이미지를 탭하면 1장씩 저장돼요. 아래는 전체 ZIP.'; wrap.appendChild(note);
+  const z=document.createElement('button'); z.className='btn mt'; z.textContent='전체 ZIP 다운로드'; z.onclick=async ()=>{ const zip=new JSZip(); results.forEach(r=>zip.file(r.name+'.jpg',r.blob)); const o=await zip.generateAsync({type:'blob'}); const a=document.createElement('a'); a.href=URL.createObjectURL(o); a.download=(p.name||'product').replace(/[\\/:*?"<>|]/g,'_').slice(0,30)+'_이미지세트.zip'; a.click(); toast('ZIP 저장 완료'); };
+  wrap.appendChild(z); out.appendChild(wrap);
 }
 
 // =========================================================
