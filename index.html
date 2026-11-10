@@ -2,526 +2,494 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>판매내역 입력 · 마진 계산기</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>다인마켓</title>
+<meta name="theme-color" content="#ff6f3c">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="다인마켓">
 <style>
   *{box-sizing:border-box}
   :root{
     --bg:#f7f7f6; --surface:#fff; --line:#ededec; --line2:#e1e1df;
     --txt:#1b1b1a; --muted:#8c8c88; --faint:#b6b6b2;
-    --accent:#ff6f3c; --pos:#1f8a4c; --neg:#c23b2b;
+    --accent:#ff6f3c; --accentw:#fff3ee; --pos:#1f8a4c; --neg:#c23b2b; --blue:#4f8cff;
   }
-  body{margin:0;background:var(--bg);color:var(--txt);
+  html,body{margin:0;background:var(--bg);color:var(--txt);
     font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic",sans-serif;
     font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:840px;margin:0 auto;padding:30px 18px 100px}
-  h1{font-size:19px;font-weight:700;letter-spacing:-.01em;margin:0 0 3px}
-  .sub{color:var(--muted);font-size:13px;margin:0 0 28px}
+  .wrap{max-width:720px;margin:0 auto;padding:16px 16px calc(78px + env(safe-area-inset-bottom))}
+  h1{font-size:19px;font-weight:700;margin:4px 0 2px}
+  .sub{color:var(--muted);font-size:12.5px;margin:0 0 18px}
+  .head{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin:0 0 12px}
+  section{display:none}
+  section.active{display:block;animation:fade .18s ease}
+  @keyframes fade{from{opacity:.4}to{opacity:1}}
 
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
-    border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:36px}
-  .stat{background:var(--surface);padding:15px 16px}
-  .stat .lbl{color:var(--muted);font-size:12px;margin-bottom:4px}
-  .stat .val{font-size:18px;font-weight:700;letter-spacing:-.02em}
-  .stat .val.accent{color:var(--accent)}
-  @media(max-width:620px){.stats{grid-template-columns:repeat(2,1fr)}}
-
-  .section{margin-bottom:36px}
-  .head{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin:0 0 14px}
-  .collapse-h{cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between}
-  .t{font-size:12px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500}
-
-  label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+  label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted);margin-bottom:10px}
   input,select,textarea{background:var(--surface);border:1px solid var(--line2);color:var(--txt);
-    border-radius:10px;padding:10px 11px;font-size:15px;font-family:inherit;width:100%}
-  input::placeholder,textarea::placeholder{color:var(--faint)}
+    border-radius:11px;padding:12px;font-size:16px;font-family:inherit;width:100%}
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
-  .grid{display:grid;grid-template-columns:1fr 1.8fr 1fr 1fr 1fr 1.1fr 1.1fr;gap:10px}
-  @media(max-width:620px){.grid{grid-template-columns:1fr 1fr}}
+  input::placeholder{color:var(--faint)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 
-  button{cursor:pointer;border:none;border-radius:10px;font-size:14px;font-weight:600;
-    padding:10px 15px;font-family:inherit;line-height:1}
-  .btn{background:var(--accent);color:#fff}
+  button{cursor:pointer;border:none;border-radius:11px;font-size:15px;font-weight:600;padding:12px 16px;font-family:inherit;line-height:1}
+  .btn{background:var(--accent);color:#fff;width:100%}
   .btn:active{opacity:.9}
-  .ghost{background:transparent;color:var(--txt);border:1px solid var(--line2)}
-  .ghost:active{background:var(--bg)}
-  .link{background:transparent;color:var(--muted);border:none;padding:8px 6px;font-weight:500;font-size:13px}
+  .ghost{background:var(--surface);color:var(--txt);border:1px solid var(--line2)}
+  .link{background:none;color:var(--muted);border:none;padding:8px 4px;font-size:13px;font-weight:500;width:auto}
   .link.danger{color:var(--neg)}
-  .sm{padding:7px 11px;font-size:13px}
-  .toolbar{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
-  .sep{flex:1}
-  .mt{margin-top:12px}
+  .sm{padding:9px 12px;font-size:13px;width:auto}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
   .hint{color:var(--muted);font-size:12.5px;line-height:1.6}
-  .hint b{color:var(--txt);font-weight:600}
+  .hint b{color:var(--txt)}
+  .mt{margin-top:12px}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);font-weight:500}
+  .badge::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--faint)}
+  .b-done::before{background:var(--pos)} .b-sale::before{background:var(--accent)} .b-refund::before{background:var(--neg)}
 
-  .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
-  table{width:100%;border-collapse:collapse;font-size:13.5px}
-  th,td{padding:11px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
-  tbody tr:last-child td{border-bottom:none}
-  th{color:var(--faint);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;position:sticky;top:0;background:var(--surface)}
+  /* 수집 갤러리 */
+  .gal{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+  .gal .cell{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:2px solid var(--line);background:var(--bg)}
+  .gal .cell.sel{border-color:var(--accent)}
+  .gal img{width:100%;height:100%;object-fit:cover;display:block}
+  .gal .chk{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.9);
+    display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--accent);font-weight:800}
+  .gal .cell:not(.sel) .chk{color:transparent;background:rgba(0,0,0,.25)}
+
+  /* 통계 */
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .stat{background:var(--surface);padding:14px 15px}
+  .stat .l{color:var(--muted);font-size:12px;margin-bottom:3px}
+  .stat .v{font-size:18px;font-weight:700;letter-spacing:-.02em}
+  .stat .v.accent{color:var(--accent)} .stat .v.pos{color:var(--pos)}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface);-webkit-overflow-scrolling:touch}
+  th,td{padding:10px 11px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+  th{color:var(--faint);font-size:11px;text-transform:uppercase;font-weight:600}
   td.l,th.l{text-align:left;font-variant-numeric:normal}
-  tbody tr:active{background:var(--bg)}
-  .pos{color:var(--pos)} .neg{color:var(--neg)}
+  tbody tr:last-child td{border-bottom:none}
+  .pos{color:var(--pos)}.neg{color:var(--neg)}
+  .del{background:none;border:none;color:var(--faint);font-size:16px;padding:4px 6px;width:auto}
 
-  .status{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);font-weight:500}
-  .status::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--faint)}
-  .s-done::before{background:var(--pos)}
-  .s-sale::before{background:var(--accent)}
-  .s-refund::before{background:var(--neg)}
+  /* 하단 탭바 */
+  .tabbar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);
+    border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);
+    padding-bottom:env(safe-area-inset-bottom);z-index:50}
+  .tabbar button{background:none;border:none;color:var(--faint);font-size:11px;font-weight:600;
+    padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;width:auto;border-radius:0}
+  .tabbar button .ic{font-size:19px;line-height:1}
+  .tabbar button.on{color:var(--accent)}
 
-  .del{background:transparent;color:var(--faint);border:none;padding:4px 6px;font-size:15px}
-  .del:active{color:var(--neg)}
-
-  .cand{display:grid;grid-template-columns:auto 1.1fr 2fr 1.1fr;gap:8px;align-items:center;
-    padding:8px;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:var(--surface)}
-  .cand input{padding:7px 9px;font-size:13px}
-
-  .foot{color:var(--faint);font-size:12px;line-height:1.7;margin-top:30px}
-  dialog{background:var(--surface);color:var(--txt);border:1px solid var(--line2);border-radius:16px;
-    padding:20px;max-width:380px;width:90%;box-shadow:0 20px 50px rgba(0,0,0,.16)}
-  dialog::backdrop{background:rgba(0,0,0,.3)}
+  details summary{cursor:pointer}
+  .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#1b1b1a;color:#fff;
+    padding:10px 16px;border-radius:999px;font-size:13px;z-index:99;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  dialog{background:var(--surface);border:1px solid var(--line2);border-radius:16px;padding:18px;max-width:340px;width:90%}
+  dialog::backdrop{background:rgba(0,0,0,.35)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>판매내역</h1>
-  <div class="sub">마진 자동 계산 · 스프레드시트(CSV)·구글 시트 호환</div>
+  <h1 id="title">다인마켓</h1>
+  <div class="sub" id="subtitle">상품 수집 · 마진 계산 · 판매 기록</div>
 
-  <div class="stats">
-    <div class="stat"><div class="lbl">건수</div><div class="val" id="s-count">0</div></div>
-    <div class="stat"><div class="lbl">판매가</div><div class="val" id="s-sales">0원</div></div>
-    <div class="stat"><div class="lbl">마진</div><div class="val accent" id="s-margin">0원</div></div>
-    <div class="stat"><div class="lbl">마진율</div><div class="val" id="s-rate">0%</div></div>
-  </div>
-
-  <div class="section">
-    <div class="head">새 판매 입력</div>
-    <div class="grid">
-      <label class="f">날짜<input type="date" id="f-date"></label>
-      <label class="f">상품명<input type="text" id="f-name" placeholder="데님 롱원피스"></label>
-      <label class="f">판매가<input type="number" id="f-price" placeholder="0" inputmode="numeric"></label>
-      <label class="f">원가<input type="number" id="f-cost" placeholder="0" inputmode="numeric"></label>
-      <label class="f">기타비용<input type="number" id="f-etc" placeholder="0" inputmode="numeric"></label>
-      <label class="f">결제방법
-        <select id="f-pay">
-          <option>당근페이</option><option>계좌이체</option><option>현금</option><option value="">-</option>
-        </select>
+  <!-- ① 상품 수집 -->
+  <section id="tab-collect" class="active">
+    <div class="head">상품 수집</div>
+    <div class="card">
+      <label class="f">공급처 상품 링크
+        <input type="url" id="c-url" placeholder="https://secretroot.imweb.me/shop/?idx=1605" inputmode="url">
       </label>
-      <label class="f">상태
-        <select id="f-status">
-          <option>정산완료</option><option>판매완료</option><option>판매중</option><option>예약중</option>
-          <option>환불</option><option>취소</option>
-        </select>
-      </label>
+      <button class="btn" id="c-go">상품 가져오기</button>
+      <div id="c-status" class="hint mt"></div>
     </div>
-    <div class="mt" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-      <button class="btn" id="add">추가 · 마진 <span id="preview">0원</span></button>
-      <span class="hint">마진 = 판매가 − 원가 − 기타비용</span>
-    </div>
-  </div>
+    <div id="c-result"></div>
+  </section>
 
-  <div class="section">
-    <div class="head collapse-h" onclick="toggle('dg')">당근페이에서 가져오기 <span class="t" id="dg-t">열기 ▾</span></div>
-    <div id="dg" style="display:none">
-      <div class="hint" style="margin-bottom:14px">
-        이용내역 <b>캡처(스크린샷)</b>를 올리면 <b>입금(+) 판매 건만</b> 자동으로 추출해요. (처음 한 번 아래 <b>⚙ AI 설정</b>에서 API 키 입력 필요) 추가 전 수정 가능.
+  <!-- ② 상품 관리 -->
+  <section id="tab-products">
+    <div class="head">상품 관리</div>
+    <div id="p-list"></div>
+    <div class="hint" id="p-empty" style="display:none">아직 저장된 상품이 없어요. <b>상품 수집</b>에서 링크로 가져와 저장해보세요.</div>
+  </section>
+
+  <!-- ③ 마진 계산 -->
+  <section id="tab-calc">
+    <div class="head">마진 계산</div>
+    <div class="card">
+      <div class="grid2">
+        <label class="f">판매가<input type="number" id="m-sell" inputmode="numeric" placeholder="0"></label>
+        <label class="f">사입가(원가)<input type="number" id="m-buy" inputmode="numeric" placeholder="0"></label>
+        <label class="f">배송비(판매자 부담)<input type="number" id="m-ship" inputmode="numeric" placeholder="0"></label>
+        <label class="f">기타비용<input type="number" id="m-etc" inputmode="numeric" placeholder="0"></label>
       </div>
-      <button type="button" class="btn" id="dg-img-btn">캡처 올리기</button>
-      <input type="file" id="dg-img" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
-      <div id="dg-imgstatus" class="hint mt"></div>
-      <details style="margin-top:14px">
-        <summary class="hint" style="cursor:pointer">또는 텍스트 붙여넣기</summary>
-        <textarea id="dg-text" rows="4" style="margin-top:10px" placeholder="당근페이 이용내역을 붙여넣으세요."></textarea>
-        <div class="mt" style="display:flex;gap:8px">
-          <button class="ghost sm" id="dg-parse">분석</button>
-          <button class="link" id="dg-clear">지우기</button>
-        </div>
-      </details>
-      <details id="ai-box" style="margin-top:14px">
-        <summary class="hint" style="cursor:pointer">⚙ AI 설정 (캡처 인식용 API 키)</summary>
-        <div style="margin-top:10px;display:grid;gap:8px;max-width:440px">
-          <label class="f">제공자
-            <select id="ai-provider"><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option></select>
-          </label>
-          <label class="f">API 키<input type="password" id="ai-key" placeholder="이 브라우저에만 저장돼요"></label>
-          <label class="f">모델 (비워두면 기본값)<input type="text" id="ai-model" placeholder="gemini-2.0-flash"></label>
-          <div style="display:flex;gap:8px"><button class="ghost sm" id="ai-save">저장</button><span id="ai-saved" class="hint"></span></div>
-          <div class="hint">키는 이 브라우저(localStorage)에만 저장돼요. 인식할 때 해당 AI사(구글/OpenAI)로만 직접 전송됩니다.</div>
-        </div>
-      </details>
-      <div id="dg-result"></div>
+      <div class="hint">공급처 배송비는 사입가에 포함하고, 여기 배송비는 <b>고객에게 보낼 때 내가 부담하는 배송비</b>만 넣으세요.</div>
     </div>
-  </div>
+    <div class="stats mt">
+      <div class="stat"><div class="l">예상 순이익</div><div class="v pos" id="m-profit">0원</div></div>
+      <div class="stat"><div class="l">마진율</div><div class="v accent" id="m-rate">0%</div></div>
+    </div>
+  </section>
 
-  <div class="section">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div class="head" style="margin:0">판매내역 <span class="t" id="rowcount">0건</span></div>
-      <button class="link" id="sortbtn">날짜순 ⇅</button>
+  <!-- ④ 판매 기록 -->
+  <section id="tab-sales">
+    <div class="head">판매 기록</div>
+    <div class="card">
+      <div class="grid2">
+        <label class="f">판매일<input type="date" id="s-date"></label>
+        <label class="f">상품명<input type="text" id="s-name" placeholder="상품명"></label>
+        <label class="f">판매가<input type="number" id="s-price" inputmode="numeric" placeholder="0"></label>
+        <label class="f">원가(사입가)<input type="number" id="s-cost" inputmode="numeric" placeholder="0"></label>
+        <label class="f">배송비<input type="number" id="s-ship" inputmode="numeric" placeholder="0"></label>
+        <label class="f">기타비용<input type="number" id="s-etc" inputmode="numeric" placeholder="0"></label>
+        <label class="f">결제방법
+          <select id="s-pay"><option>당근페이</option><option>계좌이체</option><option>현금</option><option value="">-</option></select>
+        </label>
+        <label class="f">상태
+          <select id="s-status"><option>정산완료</option><option>판매완료</option><option>판매중</option><option>예약중</option><option>환불</option><option>취소</option></select>
+        </label>
+      </div>
+      <button class="btn" id="s-add">추가 · 순이익 <span id="s-preview">0원</span></button>
+      <div class="hint mt">순이익 = 판매가 − 원가 − 배송비 − 기타비용</div>
+    </div>
+
+    <details class="card">
+      <summary class="hint">🥕 당근페이 캡처로 가져오기 (입금만)</summary>
+      <div class="mt">
+        <div class="hint" style="margin-bottom:10px">이용내역 <b>캡처</b>를 올리면 입금(+) 건만 자동 추출해요. 처음 한 번 아래 ⚙ AI 설정에 API 키 입력 필요.</div>
+        <button type="button" class="ghost sm" id="dg-img-btn">캡처 올리기</button>
+        <input type="file" id="dg-img" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+        <div id="dg-status" class="hint mt"></div>
+        <div id="dg-result"></div>
+        <details style="margin-top:12px"><summary class="hint">⚙ AI 설정 (캡처 인식용 API 키)</summary>
+          <div class="mt">
+            <label class="f">제공자<select id="ai-provider"><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option></select></label>
+            <label class="f">API 키<input type="password" id="ai-key" placeholder="이 브라우저에만 저장"></label>
+            <label class="f">모델(비우면 기본값)<input type="text" id="ai-model" placeholder="gemini-2.0-flash"></label>
+            <button class="ghost sm" id="ai-save">저장</button> <span id="ai-saved" class="hint"></span>
+          </div>
+        </details>
+      </div>
+    </details>
+
+    <div class="row" style="justify-content:space-between;margin:4px 2px 10px">
+      <span class="hint" id="s-count">0건</span>
+      <span><button class="link" id="s-exp">CSV 내보내기</button><button class="link" id="s-imp-btn">CSV 가져오기</button><button class="link danger" id="s-clear">전체삭제</button></span>
+      <input type="file" id="s-imp" accept=".csv,.txt" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
     </div>
     <div class="tablewrap">
-      <table>
-        <thead><tr>
-          <th class="l">날짜</th><th class="l">상품명</th><th>판매가</th><th>원가</th>
-          <th>기타</th><th>마진</th><th>누적</th><th class="l">결제</th><th class="l">상태</th><th></th>
-        </tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
+      <table><thead><tr>
+        <th class="l">날짜</th><th class="l">상품</th><th>판매가</th><th>원가</th><th>배송</th><th>기타</th><th>순이익</th><th class="l">결제</th><th class="l">상태</th><th></th>
+      </tr></thead><tbody id="s-body"></tbody></table>
     </div>
-    <div class="hint mt" id="empty" style="display:none">아직 내역이 없어요. 위에서 직접 입력하거나, 당근페이 캡처를 올려 추가해보세요.</div>
+  </section>
 
-    <div class="toolbar mt">
-      <button class="link" id="exp">CSV 내보내기</button>
-      <button type="button" class="link" id="imp-btn">CSV 가져오기</button>
-      <input type="file" id="imp" accept=".csv,.txt" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
-      <span class="sep"></span>
-      <button class="link danger" id="clearall">전체 삭제</button>
+  <!-- ⑤ 매출 통계 -->
+  <section id="tab-stats">
+    <div class="head">매출 통계 (완료 건만)</div>
+    <div class="stats">
+      <div class="stat"><div class="l">총매출</div><div class="v" id="st-sales">0원</div></div>
+      <div class="stat"><div class="l">총순이익</div><div class="v pos" id="st-profit">0원</div></div>
+      <div class="stat"><div class="l">총원가</div><div class="v" id="st-cost">0원</div></div>
+      <div class="stat"><div class="l">총비용(배송+기타)</div><div class="v" id="st-exp">0원</div></div>
+      <div class="stat"><div class="l">판매건수</div><div class="v" id="st-count">0건</div></div>
+      <div class="stat"><div class="l">평균 마진율</div><div class="v accent" id="st-rate">0%</div></div>
     </div>
-  </div>
-
-  <div class="foot">데이터는 이 브라우저에 자동 저장돼요. 백업은 CSV 내보내기로.<br>
-  CSV 열: 날짜 · 상품명 · 판매가 · 원가 · 기타비용 · 마진 · 누적마진 · 결제방법 · 상태<br>
-  구글 시트: CSV 내보내기 후 시트에서 파일 › 가져오기로 올리면 돼요.</div>
+    <div class="head mt">월별</div>
+    <div class="tablewrap"><table><thead><tr><th class="l">월</th><th>건수</th><th>매출</th><th>순이익</th></tr></thead><tbody id="st-month"></tbody></table></div>
+    <div class="hint mt">취소·환불은 집계에서 제외됩니다. 데이터는 이 브라우저에 저장돼요(CSV로 백업 권장).</div>
+  </section>
 </div>
 
-<dialog id="confirm">
-  <div id="confirm-msg" style="margin-bottom:18px"></div>
-  <div style="display:flex;gap:8px;justify-content:flex-end">
-    <button class="ghost sm" onclick="document.getElementById('confirm').close()">취소</button>
-    <button class="sm" id="confirm-ok" style="background:var(--neg);color:#fff">삭제</button>
-  </div>
+<nav class="tabbar">
+  <button data-tab="collect" class="on"><span class="ic">📥</span>수집</button>
+  <button data-tab="products"><span class="ic">📦</span>상품</button>
+  <button data-tab="calc"><span class="ic">🧮</span>계산</button>
+  <button data-tab="sales"><span class="ic">🧾</span>판매</button>
+  <button data-tab="stats"><span class="ic">📊</span>통계</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+<dialog id="confirm"><div id="confirm-msg" style="margin-bottom:16px"></div>
+  <div class="row" style="justify-content:flex-end"><button class="ghost sm" id="confirm-no">취소</button><button class="sm" id="confirm-yes" style="background:var(--neg);color:#fff">삭제</button></div>
 </dialog>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
-const SEED = [];
-const KEY = 'sales_app_v1';
-let rows = load();
+const API = location.origin.includes('github.io') ? '' : ''; // same-origin /api on Vercel
+const $ = id => document.getElementById(id);
+const won = n => (Math.round(n||0)).toLocaleString('ko-KR') + '원';
+const num = v => { const n = parseFloat(('' + (v??'')).replace(/[^0-9.-]/g,'')); return isNaN(n)?0:n; };
+const uid = () => Math.random().toString(36).slice(2);
+const today = () => { const d=new Date(),o=d.getTimezoneOffset(); return new Date(d-o*6e4).toISOString().slice(0,10); };
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
 
-function load(){ try{ const r=JSON.parse(localStorage.getItem(KEY)); return Array.isArray(r)?r:[]; }catch(e){ return []; } }
-function save(){ localStorage.setItem(KEY, JSON.stringify(rows)); }
-function won(n){ return (Math.round(n)).toLocaleString('ko-KR')+'원'; }
-function num(v){ v=(''+(v??'')).replace(/[^0-9.-]/g,''); const n=parseFloat(v); return isNaN(n)?0:n; }
-function todayStr(){ const d=new Date(); const o=d.getTimezoneOffset(); const t=new Date(d-o*60000); return t.toISOString().slice(0,10); }
-function margin(r){ return num(r.price)-num(r.cost)-num(r.etc); }
+// ---------- 탭 ----------
+document.querySelectorAll('.tabbar button').forEach(b=>b.onclick=()=>{
+  const t=b.dataset.tab;
+  document.querySelectorAll('.tabbar button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('section').forEach(s=>s.classList.toggle('active', s.id==='tab-'+t));
+  if(t==='products') renderProducts();
+  if(t==='stats') renderStats();
+  window.scrollTo(0,0);
+});
 
-function statusClass(s){ if(s==='판매완료'||s==='정산완료')return 's-done'; if(s==='판매중'||s==='예약중')return 's-sale'; if(s==='환불'||s==='취소')return 's-refund'; return 's-etc'; }
+// ---------- 저장소 ----------
+const load = (k,def) => { try{ const v=JSON.parse(localStorage.getItem(k)); return v??def; }catch(e){ return def; } };
+let sales = load('dm_sales', []);
+let products = load('dm_products', []);
+const saveSales = () => localStorage.setItem('dm_sales', JSON.stringify(sales));
+const saveProducts = () => localStorage.setItem('dm_products', JSON.stringify(products));
 
-function render(){
-  rows.forEach(r=>{ if(!r.id) r.id = Math.random().toString(36).slice(2); });
-  const tb=document.getElementById('tbody'); tb.innerHTML='';
-  let cum=0, totalSales=0, totalMargin=0, cnt=0;
-  rows.forEach((r)=>{
-    const m=margin(r);
-    const counts = r.status!=='환불' && r.status!=='취소';
-    if(counts){ cum+=m; totalSales+=num(r.price); totalMargin+=m; cnt++; }
+// =========================================================
+//  ① 상품 수집
+// =========================================================
+let lastCollect = null;
+$('c-go').onclick = async () => {
+  const url = $('c-url').value.trim();
+  if(!/^https:\/\/secretroot\.imweb\.me\/shop\//.test(url)){ toast('시크릿루트 상품 링크를 넣어주세요'); return; }
+  const st=$('c-status'); st.textContent='⏳ 상품 정보를 가져오는 중...';
+  $('c-result').innerHTML='';
+  try{
+    const r = await fetch(API+'/api/collect?url='+encodeURIComponent(url));
+    const d = await r.json();
+    if(d.error){ st.textContent='오류: '+d.error; return; }
+    lastCollect = d;
+    st.innerHTML = '✅ <b>'+ (d.counts.total) +'장</b> 수집 ('+d.counts.detail+' 상세 / '+d.counts.thumbnail+' 썸네일)';
+    renderCollect(d, url);
+  }catch(e){ st.textContent='수집 실패: '+e.message; }
+};
+function renderCollect(d, url){
+  const imgs = d.images.all;
+  const box = $('c-result');
+  box.innerHTML = '';
+  const card = document.createElement('div'); card.className='card';
+  card.innerHTML = `<div style="font-weight:700;margin-bottom:4px">${esc(d.name||'상품')}</div>
+    <div class="hint" style="margin-bottom:10px">가격은 회원공개라 자동수집하지 않아요 — 저장 후 <b>사입가를 직접 입력</b>하세요.</div>
+    <div class="row"><button class="ghost sm" id="c-all">전체선택</button><button class="ghost sm" id="c-none">전체해제</button>
+    <span class="hint" id="c-selcount"></span></div>`;
+  const gal = document.createElement('div'); gal.className='gal';
+  const sel = new Set(imgs.map((_,i)=>i));
+  imgs.forEach((u,i)=>{
+    const cell=document.createElement('div'); cell.className='cell sel';
+    cell.innerHTML = `<img loading="lazy" src="${API}/api/image?src=${encodeURIComponent(u)}"><div class="chk">✓</div>`;
+    cell.onclick=()=>{ if(sel.has(i)){sel.delete(i);cell.classList.remove('sel');} else {sel.add(i);cell.classList.add('sel');} updateSel(); };
+    gal.appendChild(cell);
+  });
+  card.appendChild(gal);
+  const actions=document.createElement('div'); actions.className='row mt'; actions.style.gap='8px';
+  actions.innerHTML = `<button class="btn" id="c-save" style="width:auto;flex:1">상품으로 저장</button>
+    <button class="ghost sm" id="c-zip" style="flex:1">이미지 ZIP 다운로드</button>`;
+  card.appendChild(actions);
+  box.appendChild(card);
+  const updateSel=()=>{ $('c-selcount').textContent = sel.size+'장 선택'; };
+  updateSel();
+  $('c-all').onclick=()=>{ imgs.forEach((_,i)=>sel.add(i)); gal.querySelectorAll('.cell').forEach(c=>c.classList.add('sel')); updateSel(); };
+  $('c-none').onclick=()=>{ sel.clear(); gal.querySelectorAll('.cell').forEach(c=>c.classList.remove('sel')); updateSel(); };
+  const chosen=()=>[...sel].sort((a,b)=>a-b).map(i=>imgs[i]);
+  $('c-save').onclick=()=>{
+    const p={ id:uid(), name:d.name||'상품', url, buy:0, ship:0, sell:0, status:'준비중',
+      thumb: chosen()[0]||d.ogImage||imgs[0]||'', images: chosen() };
+    products.unshift(p); saveProducts();
+    toast('상품 관리에 저장됐어요');
+    document.querySelector('.tabbar button[data-tab="products"]').click();
+  };
+  $('c-zip').onclick=async ()=>{
+    const list=chosen(); if(!list.length){ toast('선택된 이미지가 없어요'); return; }
+    const btn=$('c-zip'); btn.textContent='⏳ 받는 중...'; btn.disabled=true;
+    try{
+      const zip=new JSZip();
+      for(let i=0;i<list.length;i++){
+        const resp=await fetch(API+'/api/image?src='+encodeURIComponent(list[i]));
+        const blob=await resp.blob();
+        const ext=(blob.type.split('/')[1]||'jpg').replace('jpeg','jpg').split(';')[0];
+        zip.file('photo_'+String(i+1).padStart(2,'0')+'.'+ext, blob);
+      }
+      const out=await zip.generateAsync({type:'blob'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(out);
+      a.download=(d.name||'product').replace(/[\\/:*?"<>|]/g,'_').slice(0,40)+'.zip'; a.click();
+      toast(list.length+'장 ZIP 저장 완료');
+    }catch(e){ toast('ZIP 실패: '+e.message); }
+    finally{ btn.textContent='이미지 ZIP 다운로드'; btn.disabled=false; }
+  };
+}
+
+// =========================================================
+//  ② 상품 관리
+// =========================================================
+function renderProducts(){
+  const box=$('p-list'); box.innerHTML='';
+  $('p-empty').style.display = products.length?'none':'block';
+  products.forEach(p=>{
+    const profit = num(p.sell)-num(p.buy)-num(p.ship);
+    const rate = num(p.sell)? (profit/num(p.sell)*100):0;
+    const c=document.createElement('div'); c.className='card';
+    c.innerHTML=`
+      <div class="row" style="gap:10px;align-items:flex-start">
+        <img src="${p.thumb?(API+'/api/image?src='+encodeURIComponent(p.thumb)):''}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;background:var(--bg);flex:none">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
+          <a href="${esc(p.url)}" target="_blank" class="hint" style="color:var(--blue)">공급처 링크</a>
+        </div>
+        <button class="del" data-del="${p.id}">✕</button>
+      </div>
+      <div class="grid3 mt">
+        <label class="f">사입가<input type="number" inputmode="numeric" data-f="buy" data-id="${p.id}" value="${num(p.buy)||''}" placeholder="0"></label>
+        <label class="f">배송비<input type="number" inputmode="numeric" data-f="ship" data-id="${p.id}" value="${num(p.ship)||''}" placeholder="0"></label>
+        <label class="f">판매가<input type="number" inputmode="numeric" data-f="sell" data-id="${p.id}" value="${num(p.sell)||''}" placeholder="0"></label>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <span class="hint">예상순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · 마진율 <b>${rate.toFixed(1)}%</b></span>
+        <select data-f="status" data-id="${p.id}" style="width:auto;padding:7px 10px;font-size:13px">
+          ${['준비중','판매중','판매완료','보류'].map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="row mt" style="gap:8px">
+        <button class="ghost sm" data-imgs="${p.id}" style="flex:1">사진 ${p.images?.length||0}장 ZIP</button>
+        <button class="ghost sm" data-sell="${p.id}" style="flex:1">판매 등록 →</button>
+      </div>`;
+    box.appendChild(c);
+  });
+  box.querySelectorAll('input[data-f],select[data-f]').forEach(el=>{
+    el.oninput=el.onchange=()=>{ const p=products.find(x=>x.id===el.dataset.id); if(!p)return; p[el.dataset.f]=el.value; saveProducts(); if(el.dataset.f!=='status') renderProducts(); };
+  });
+  box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>askDel('이 상품을 삭제할까요?',()=>{ products=products.filter(x=>x.id!==b.dataset.del); saveProducts(); renderProducts(); }));
+  box.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>{ const p=products.find(x=>x.id===b.dataset.sell); if(!p)return;
+    $('s-name').value=p.name; $('s-price').value=num(p.sell)||''; $('s-cost').value=num(p.buy)||''; $('s-ship').value=num(p.ship)||''; $('s-date').value=today(); salesPreview();
+    document.querySelector('.tabbar button[data-tab="sales"]').click(); toast('판매 입력에 채웠어요'); });
+  box.querySelectorAll('[data-imgs]').forEach(b=>b.onclick=async ()=>{ const p=products.find(x=>x.id===b.dataset.imgs); if(!p||!p.images?.length){toast('저장된 사진이 없어요');return;}
+    b.textContent='⏳...'; b.disabled=true;
+    try{ const zip=new JSZip();
+      for(let i=0;i<p.images.length;i++){ const resp=await fetch(API+'/api/image?src='+encodeURIComponent(p.images[i])); const blob=await resp.blob(); const ext=(blob.type.split('/')[1]||'jpg').replace('jpeg','jpg').split(';')[0]; zip.file('photo_'+String(i+1).padStart(2,'0')+'.'+ext,blob); }
+      const out=await zip.generateAsync({type:'blob'}); const a=document.createElement('a'); a.href=URL.createObjectURL(out); a.download=p.name.replace(/[\\/:*?"<>|]/g,'_').slice(0,40)+'.zip'; a.click(); toast('ZIP 저장 완료');
+    }catch(e){toast('ZIP 실패');} finally{ b.textContent='사진 '+(p.images?.length||0)+'장 ZIP'; b.disabled=false; } });
+}
+
+// =========================================================
+//  ③ 마진 계산
+// =========================================================
+function calc(){
+  const profit=num($('m-sell').value)-num($('m-buy').value)-num($('m-ship').value)-num($('m-etc').value);
+  const rate=num($('m-sell').value)? profit/num($('m-sell').value)*100:0;
+  $('m-profit').textContent=won(profit); $('m-rate').textContent=rate.toFixed(1)+'%';
+}
+['m-sell','m-buy','m-ship','m-etc'].forEach(id=>$(id).addEventListener('input',calc));
+
+// =========================================================
+//  ④ 판매 기록
+// =========================================================
+function salesMargin(r){ return num(r.price)-num(r.cost)-num(r.ship)-num(r.etc); }
+function statusBadge(s){ return s==='정산완료'||s==='판매완료'?'b-done':(s==='판매중'||s==='예약중'?'b-sale':(s==='환불'||s==='취소'?'b-refund':'')); }
+function salesPreview(){ $('s-preview').textContent=won(num($('s-price').value)-num($('s-cost').value)-num($('s-ship').value)-num($('s-etc').value)); }
+['s-price','s-cost','s-ship','s-etc'].forEach(id=>$(id).addEventListener('input',salesPreview));
+function renderSales(){
+  const tb=$('s-body'); tb.innerHTML='';
+  sales.forEach(r=>{ const m=salesMargin(r);
     const tr=document.createElement('tr');
-    tr.innerHTML=`
-      <td class="l">${r.date||''}</td>
-      <td class="l">${escape(r.name||'')}</td>
-      <td>${num(r.price).toLocaleString()}</td>
-      <td>${num(r.cost).toLocaleString()}</td>
-      <td>${num(r.etc).toLocaleString()}</td>
-      <td class="${m>=0?'pos':'neg'}">${m.toLocaleString()}</td>
-      <td>${counts?cum.toLocaleString():'-'}</td>
-      <td class="l" style="color:var(--muted)">${escape(r.pay||'')}</td>
-      <td class="l"><span class="status ${statusClass(r.status)}">${r.status||''}</span></td>
-      <td><button class="del" data-id="${r.id}">✕</button></td>`;
-    tr.querySelector('td:nth-child(2)').style.cursor='pointer';
-    tr.querySelector('td:nth-child(2)').onclick=()=>editRow(r.id);
-    tr.querySelector('td:nth-child(3)').style.cursor='pointer';
-    tr.querySelector('td:nth-child(3)').onclick=()=>editRow(r.id);
+    tr.innerHTML=`<td class="l">${r.date||''}</td><td class="l">${esc(r.name||'')}</td>
+      <td>${num(r.price).toLocaleString()}</td><td>${num(r.cost).toLocaleString()}</td><td>${num(r.ship).toLocaleString()}</td><td>${num(r.etc).toLocaleString()}</td>
+      <td class="${m>=0?'pos':'neg'}">${m.toLocaleString()}</td><td class="l">${esc(r.pay||'')}</td>
+      <td class="l"><span class="badge ${statusBadge(r.status)}">${r.status||''}</span></td><td><button class="del" data-id="${r.id}">✕</button></td>`;
     tb.appendChild(tr);
   });
-  document.querySelectorAll('.del').forEach(b=>b.onclick=()=>askDelete(b.dataset.id));
-  document.getElementById('s-count').textContent=cnt+'건';
-  document.getElementById('s-sales').textContent=won(totalSales);
-  document.getElementById('s-margin').textContent=won(totalMargin);
-  document.getElementById('s-rate').textContent=(totalSales? (totalMargin/totalSales*100).toFixed(1):0)+'%';
-  document.getElementById('rowcount').textContent=rows.length+'건';
-  document.getElementById('empty').style.display=rows.length?'none':'block';
-  save();
+  tb.querySelectorAll('.del').forEach(b=>b.onclick=()=>askDel('이 판매기록을 삭제할까요?',()=>{ sales=sales.filter(x=>x.id!==b.dataset.id); saveSales(); renderSales(); }));
+  $('s-count').textContent=sales.length+'건';
+  saveSales();
 }
-function escape(s){ return (''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-
-function editRow(id){
-  const r=rows.find(x=>x.id===id); if(!r)return;
-  const name=prompt('상품명',r.name)??r.name;
-  const price=prompt('판매가',num(r.price))??r.price;
-  const cost=prompt('원가(공급가)',num(r.cost))??r.cost;
-  const etc=prompt('기타비용',num(r.etc))??r.etc;
-  r.name=name; r.price=num(price); r.cost=num(cost); r.etc=num(etc);
-  render();
-}
-
-let pendingDelete=null;
-function askDelete(id){
-  pendingDelete=id;
-  const r=rows.find(x=>x.id===id);
-  document.getElementById('confirm-msg').textContent=`"${r?r.name:''}" 내역을 삭제할까요?`;
-  document.getElementById('confirm-ok').textContent='삭제';
-  document.getElementById('confirm').showModal();
-}
-document.getElementById('confirm-ok').onclick=()=>{
-  if(pendingDelete==='__ALL__'){ rows=[]; }
-  else { rows=rows.filter(x=>x.id!==pendingDelete); }
-  pendingDelete=null; document.getElementById('confirm').close(); render();
+$('s-add').onclick=()=>{
+  const name=$('s-name').value.trim(); if(!name){ toast('상품명을 입력하세요'); return; }
+  sales.unshift({ id:uid(), date:$('s-date').value||today(), name, price:num($('s-price').value), cost:num($('s-cost').value), ship:num($('s-ship').value), etc:num($('s-etc').value), pay:$('s-pay').value, status:$('s-status').value });
+  sales.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  ['s-name','s-price','s-cost','s-ship','s-etc'].forEach(id=>$(id).value=''); salesPreview(); renderSales(); toast('추가됨');
 };
-
-// 입력
-function previewMargin(){
-  const m=num(pval('f-price'))-num(pval('f-cost'))-num(pval('f-etc'));
-  document.getElementById('preview').textContent=won(m);
-}
-function pval(id){ return document.getElementById(id).value; }
-['f-price','f-cost','f-etc'].forEach(id=>document.getElementById(id).addEventListener('input',previewMargin));
-
-document.getElementById('add').onclick=()=>{
-  const name=pval('f-name').trim();
-  if(!name){ alert('상품명을 입력하세요'); return; }
-  rows.push({ id:Math.random().toString(36).slice(2),
-    date:pval('f-date')||todayStr(), name,
-    price:num(pval('f-price')), cost:num(pval('f-cost')), etc:num(pval('f-etc')),
-    pay:pval('f-pay'), status:pval('f-status') });
-  sortByDate();
-  ['f-name','f-price','f-cost','f-etc'].forEach(id=>document.getElementById(id).value='');
-  previewMargin(); render();
-  document.getElementById('f-name').focus();
-};
-
-// 정렬
-let sortAsc=true;
-function sortByDate(){ rows.sort((a,b)=> (a.date||'').localeCompare(b.date||'')); }
-document.getElementById('sortbtn').onclick=()=>{
-  sortAsc=!sortAsc;
-  rows.sort((a,b)=> sortAsc ? (a.date||'').localeCompare(b.date||'') : (b.date||'').localeCompare(a.date||''));
-  render();
-};
-
 // CSV
-const HEAD=['날짜','상품명','판매가','원가(공급가)','기타비용','마진','누적마진','결제방법','판매상태'];
-function buildCSV(){
-  sortByDate();
-  let cum=0; const lines=[HEAD.join(',')];
-  rows.forEach(r=>{ const m=margin(r); const counts=r.status!=='환불'&&r.status!=='취소'; if(counts)cum+=m;
-    lines.push([r.date,csv(r.name),num(r.price),num(r.cost),num(r.etc),m,counts?cum:'',csv(r.pay||''),r.status].join(','));
-  });
-  return '﻿'+lines.join('\r\n');
-}
-function fallbackDownload(fn,text){
-  const blob=new Blob([text],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fn; a.click();
-}
-document.getElementById('exp').onclick=()=>{ fallbackDownload('판매내역_'+todayStr()+'.csv', buildCSV()); };
-function csv(s){ s=''+(s??''); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
-
-document.getElementById('imp').onchange=(e)=>{
-  const file=e.target.files[0]; if(!file)return;
-  const rd=new FileReader();
-  rd.onload=()=>{ importCSV(rd.result); e.target.value=''; };
-  rd.readAsText(file,'utf-8');
+const HEAD=['날짜','상품명','판매가','원가','배송비','기타비용','마진','결제방법','판매상태'];
+const csvq=s=>{s=''+(s??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+$('s-exp').onclick=()=>{
+  const lines=[HEAD.join(',')];
+  [...sales].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>lines.push([r.date,csvq(r.name),num(r.price),num(r.cost),num(r.ship),num(r.etc),salesMargin(r),csvq(r.pay||''),r.status].join(',')));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv'})); a.download='판매내역_'+today()+'.csv'; a.click();
 };
-function parseCSVLine(line){
-  const out=[]; let cur='',q=false;
-  for(let i=0;i<line.length;i++){ const c=line[i];
-    if(q){ if(c=='"'){ if(line[i+1]=='"'){cur+='"';i++;} else q=false; } else cur+=c; }
-    else { if(c=='"')q=true; else if(c==','){out.push(cur);cur='';} else cur+=c; }
-  } out.push(cur); return out;
-}
-function importCSV(text){
-  text=text.replace(/^﻿/,'');
-  const raw=text.split(/\r?\n/).filter(l=>l.trim()!=='');
-  let added=0;
-  raw.forEach(line=>{
-    const c=parseCSVLine(line).map(x=>x.trim());
-    if(c.length<3) return;
-    const joined=c.join('');
-    if(joined.includes('마진계산기')) return;         // 제목행
-    if(c[0]==='날짜'||c[1]==='상품명') return;          // 헤더행
-    const date=/\d{4}[-./]\d{1,2}[-./]\d{1,2}/.test(c[0])?c[0].replace(/[./]/g,'-'):c[0];
-    const name=c[1]; if(!name) return;
-    // 9열(결제방법 포함): pay=c[7], status=c[8]  /  8열(구버전): status=c[7]
-    const hasPay=c.length>=9;
-    const pay=hasPay?(c[7]||''):'';
-    const status=(hasPay?c[8]:c[7])||'판매완료';
-    rows.push({ id:Math.random().toString(36).slice(2), date, name,
-      price:num(c[2]), cost:num(c[3]), etc:num(c[4]||0),
-      pay, status });
-    added++;
+$('s-imp-btn').onclick=()=>$('s-imp').click();
+$('s-imp').onchange=e=>{ const f=e.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ importCSV(rd.result); e.target.value=''; }; rd.readAsText(f,'utf-8'); };
+function pcsv(line){ const o=[];let c='',q=false; for(let i=0;i<line.length;i++){const ch=line[i]; if(q){if(ch=='"'){if(line[i+1]=='"'){c+='"';i++;}else q=false;}else c+=ch;}else{if(ch=='"')q=true;else if(ch==','){o.push(c);c='';}else c+=ch;}} o.push(c); return o; }
+function importCSV(text){ text=text.replace(/^﻿/,''); let n=0;
+  text.split(/\r?\n/).filter(l=>l.trim()).forEach(line=>{ const c=pcsv(line).map(x=>x.trim()); if(c.length<3)return; if(c[0]==='날짜'||c[1]==='상품명'||c.join('').includes('마진계산기'))return;
+    const name=c[1]; if(!name)return; const date=/\d{4}[-./]\d{1,2}[-./]\d{1,2}/.test(c[0])?c[0].replace(/[./]/g,'-'):c[0];
+    // 9열: 날짜,상품,판매가,원가,배송비,기타,마진,결제,상태  (구버전도 관대 처리)
+    const nine=c.length>=9;
+    sales.push({ id:uid(), date, name, price:num(c[2]), cost:num(c[3]), ship:nine?num(c[4]):0, etc:num(nine?c[5]:c[4]||0), pay:nine?(c[7]||''):(c[5]||''), status:(nine?c[8]:c[7])||'판매완료' }); n++;
   });
-  sortByDate(); render();
-  alert(added+'건을 불러왔어요.');
+  sales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')); renderSales(); toast(n+'건 불러옴');
 }
+$('s-clear').onclick=()=>askDel('모든 판매기록을 삭제할까요? 되돌릴 수 없어요.',()=>{ sales=[]; saveSales(); renderSales(); });
 
-// 당근페이 파서
-function showCandidates(cands){
-  const box=document.getElementById('dg-result'); box.innerHTML='';
-  if(!cands.length){ box.innerHTML='<div class="hint mt">입금(판매) 내역을 찾지 못했어요. 다른 캡처를 올리거나 텍스트로 붙여넣어 보세요.</div>'; return; }
-  const head=document.createElement('div'); head.className='hint mt';
-  head.innerHTML=`<b>${cands.length}건</b>의 입금(판매)을 찾았어요 — 확인/수정 후 "선택 추가".`;
-  box.appendChild(head);
-  cands.forEach((c,i)=>{
-    const d=document.createElement('div'); d.className='cand';
-    d.innerHTML=`<input type="checkbox" checked data-i="${i}" class="cc" style="width:auto">
-      <input type="date" value="${c.date||todayStr()}" data-i="${i}" class="cd">
-      <input type="text" value="${escape(c.name||'')}" data-i="${i}" class="cn" placeholder="상품명">
-      <input type="number" value="${num(c.price)}" data-i="${i}" class="cp">`;
-    box.appendChild(d);
-  });
+// ---------- 당근 캡처(AI) ----------
+function aiCfg(){ try{return JSON.parse(localStorage.getItem('ai_cfg'))||{};}catch(e){return{};} }
+const DGP=`다음 이미지는 한국 당근페이 '이용내역' 스크린샷입니다. 내가 물건을 팔아서 받은 '입금' 건만 추출하세요.
+- 포함: 금액이 +인(초록) 상품 거래. 제외: -(출금/구매), 은행 이체(국민 등), 충전, 혜택.
+날짜는 '2026년 11월' 같은 월 구분과 '11.08'을 합쳐 YYYY-MM-DD(정산일)로. 금액은 숫자만.
+오직 JSON 배열만: [{"date":"2026-11-08","name":"리본 슬리퍼","price":4000}]. 없으면 [].`;
+function b64(f){return new Promise((s,j)=>{const r=new FileReader();r.onload=()=>s(String(r.result).split(',')[1]);r.onerror=j;r.readAsDataURL(f);});}
+function arr(t){const s=t.indexOf('['),e=t.lastIndexOf(']');if(s<0)throw new Error('JSON 배열 없음');return JSON.parse(t.slice(s,e+1));}
+async function vision(f){ const c=aiCfg(); if(!c.key)throw new Error('NO_KEY'); const d=await b64(f),mime=f.type||'image/jpeg';
+  if((c.provider||'gemini')==='openai'){ const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.key},body:JSON.stringify({model:c.model||'gpt-4o-mini',messages:[{role:'user',content:[{type:'text',text:DGP},{type:'image_url',image_url:{url:'data:'+mime+';base64,'+d}}]}]})}); if(!r.ok)throw new Error('OpenAI '+r.status); return arr((await r.json()).choices[0].message.content||''); }
+  const m=c.model||'gemini-2.0-flash'; const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+m+':generateContent?key='+encodeURIComponent(c.key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:DGP},{inline_data:{mime_type:mime,data:d}}]}],generationConfig:{response_mime_type:'application/json'}})}); if(!r.ok)throw new Error('Gemini '+r.status); const j=await r.json(); return arr((((j.candidates||[])[0]||{}).content||{}).parts?.map(p=>p.text||'').join('')||'');
+}
+$('dg-img-btn').onclick=()=>$('dg-img').click();
+$('dg-img').onchange=async e=>{ const files=[...(e.target.files||[])]; e.target.value=''; if(!files.length)return; const st=$('dg-status');
+  if(!aiCfg().key){ st.innerHTML='먼저 <b>⚙ AI 설정</b>에서 API 키를 입력하세요.'; return; }
+  st.textContent='⏳ 입금 내역 읽는 중...';
+  try{ let all=[]; for(const f of files){ const a=await vision(f); if(Array.isArray(a))all=all.concat(a); } st.textContent='✅ '+all.length+'건 인식'; dgCands(all); }
+  catch(err){ st.textContent = err.message==='NO_KEY'?'API 키를 먼저 입력하세요.':'인식 실패: '+err.message; }
+};
+function dgCands(cands){ const box=$('dg-result'); box.innerHTML='';
+  if(!cands.length){ box.innerHTML='<div class="hint mt">입금 건을 못 찾았어요.</div>'; return; }
+  cands.forEach((c,i)=>{ const d=document.createElement('div'); d.className='row mt'; d.style.gap='6px';
+    d.innerHTML=`<input type="checkbox" checked data-i="${i}" style="width:auto"><input type="date" value="${c.date||today()}" data-d="${i}" style="flex:1"><input value="${esc(c.name||'')}" data-n="${i}" style="flex:2"><input type="number" value="${num(c.price)}" data-p="${i}" style="width:90px">`;
+    box.appendChild(d); });
   const btn=document.createElement('button'); btn.className='btn mt'; btn.textContent='선택 추가';
-  btn.onclick=()=>{
-    let added=0;
-    [...document.querySelectorAll('.cc')].forEach(ch=>{ if(!ch.checked)return; const i=ch.dataset.i;
-      const date=document.querySelector(`.cd[data-i="${i}"]`).value||todayStr();
-      const name=document.querySelector(`.cn[data-i="${i}"]`).value.trim()||'당근 거래';
-      const price=num(document.querySelector(`.cp[data-i="${i}"]`).value);
-      rows.push({ id:Math.random().toString(36).slice(2), date, name, price, cost:0, etc:0, pay:'당근페이', status:'정산완료' });
-      added++;
-    });
-    sortByDate(); render();
-    box.innerHTML=`<div class="hint mt">✅ ${added}건 추가됨 (날짜=정산일, 상태=정산완료). 원가는 테이블에서 상품명·판매가를 눌러 입력하세요.</div>`;
-  };
+  btn.onclick=()=>{ let n=0; box.querySelectorAll('input[type=checkbox]').forEach(ch=>{ if(!ch.checked)return; const i=ch.dataset.i;
+    sales.unshift({id:uid(),date:box.querySelector(`[data-d="${i}"]`).value||today(),name:box.querySelector(`[data-n="${i}"]`).value.trim()||'당근거래',price:num(box.querySelector(`[data-p="${i}"]`).value),cost:0,ship:0,etc:0,pay:'당근페이',status:'정산완료'}); n++; });
+    sales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')); renderSales(); box.innerHTML='<div class="hint mt">✅ '+n+'건 추가됨 (결제=당근페이, 상태=정산완료). 원가는 표에서 수정하세요.</div>'; };
   box.appendChild(btn);
 }
-
-// 텍스트 붙여넣기 분석
-document.getElementById('dg-parse').onclick=()=>{ showCandidates(parseKarrot(document.getElementById('dg-text').value)); };
-document.getElementById('dg-clear').onclick=()=>{ document.getElementById('dg-text').value=''; document.getElementById('dg-result').innerHTML=''; };
-
-// 캡처(스크린샷) 분석 — Claude 이미지 분석 사용, 입금(+)만
-const DG_PROMPT = `다음 이미지는 한국 당근페이 '이용내역' 스크린샷입니다.
-내가 물건을 팔아서 받은 '입금' 건만 추출하세요.
-- 포함: 금액이 +로 표시된(초록색) 상품 거래 (예: 상품명과 +4,000원)
-- 제외: 금액이 -인 출금/구매, 은행계좌 이체(예: '국민 3768' 등 은행명/계좌/카드 표시), '충전', '혜택'
-날짜는 화면의 '2026년 11월' 같은 월 구분과 '11.08' 같은 표기를 합쳐 YYYY-MM-DD로 만드세요.
-금액은 숫자만(원과 콤마 제거).
-오직 JSON 배열만 출력. 예: [{"date":"2026-11-08","name":"리본 슬리퍼","price":4000}]
-입금 건이 없으면 [] 만 출력.`;
-
-// ===== 본인 AI API 키로 캡처 인식 =====
-function aiCfg(){ try{return JSON.parse(localStorage.getItem('ai_cfg'))||{};}catch(e){return {};} }
-function saveAiCfg(c){ localStorage.setItem('ai_cfg', JSON.stringify(c)); }
-function fileToB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
-function extractArr(t){ const s=t.indexOf('['), e=t.lastIndexOf(']'); if(s<0||e<0) throw new Error('결과에서 JSON 배열을 찾지 못했어요'); return JSON.parse(t.slice(s,e+1)); }
-
-async function callVision(file){
-  const c=aiCfg(); if(!c.key) throw new Error('NO_KEY');
-  const b64=await fileToB64(file); const mime=file.type||'image/jpeg';
-  if((c.provider||'gemini')==='openai'){
-    const model=c.model||'gpt-4o-mini';
-    const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.key},
-      body:JSON.stringify({model,messages:[{role:'user',content:[
-        {type:'text',text:DG_PROMPT},
-        {type:'image_url',image_url:{url:'data:'+mime+';base64,'+b64}}]}]})});
-    if(!r.ok) throw new Error('OpenAI '+r.status+' · '+(await r.text()).slice(0,160));
-    const j=await r.json(); return extractArr(j.choices[0].message.content||'');
-  } else {
-    const model=c.model||'gemini-2.0-flash';
-    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(c.key),
-      {method:'POST',headers:{'Content-Type':'application/json'},
-       body:JSON.stringify({contents:[{parts:[{text:DG_PROMPT},{inline_data:{mime_type:mime,data:b64}}]}],
-         generationConfig:{response_mime_type:'application/json'}})});
-    if(!r.ok) throw new Error('Gemini '+r.status+' · '+(await r.text()).slice(0,160));
-    const j=await r.json();
-    const txt=(((j.candidates||[])[0]||{}).content||{}).parts?.map(p=>p.text||'').join('')||'';
-    return extractArr(txt);
-  }
-}
-
-document.getElementById('dg-img').onchange=async (e)=>{
-  const files=[...(e.target.files||[])]; e.target.value='';
-  if(!files.length) return;
-  const st=document.getElementById('dg-imgstatus');
-  if(!aiCfg().key){ st.innerHTML='먼저 아래 <b>⚙ AI 설정</b>에서 API 키를 입력하세요.'; const b=document.getElementById('ai-box'); if(b) b.open=true; return; }
-  st.textContent='⏳ 캡처에서 입금(판매) 내역을 읽는 중...';
-  try{
-    let all=[];
-    for(const f of files){ const arr=await callVision(f); if(Array.isArray(arr)) all=all.concat(arr); }
-    st.textContent='✅ '+all.length+'건 인식 — 확인 후 추가하세요.';
-    showCandidates(all.map(x=>({date:x&&x.date,name:x&&x.name,price:x&&x.price})));
-  }catch(err){
-    const m=(err&&err.message)||'';
-    if(m==='NO_KEY'){ st.innerHTML='먼저 <b>⚙ AI 설정</b>에서 API 키를 입력하세요.'; const b=document.getElementById('ai-box'); if(b) b.open=true; }
-    else st.textContent='인식 실패: '+m;
-  }
-};
-
-function parseKarrot(text){
-  const lines=text.split(/\n/).map(l=>l.trim());
-  const amtRe=/-?\s*₩?\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,})\s*원?/;
-  const dateRe=/(20\d{2})[.\-\/년]\s*(\d{1,2})[.\-\/월]\s*(\d{1,2})/;
-  const mdRe=/(^|\s)(\d{1,2})[.\-\/월]\s*(\d{1,2})일?/;
-  const skip=/^(입금|출금|결제|송금|당근페이|이용내역|충전|전체|더보기|완료|대기)$/;
-  const cands=[]; let lastDate=todayStr(); let lastName='';
-  lines.forEach(line=>{
-    if(!line){ return; }
-    const dm=line.match(dateRe);
-    if(dm){ lastDate=`${dm[1]}-${String(dm[2]).padStart(2,'0')}-${String(dm[3]).padStart(2,'0')}`; }
-    else { const md=line.match(mdRe); if(md){ const y=new Date().getFullYear(); lastDate=`${y}-${String(md[2]).padStart(2,'0')}-${String(md[3]).padStart(2,'0')}`; } }
-    const am=line.match(amtRe);
-    if(am){
-      const price=Math.abs(parseInt(am[1].replace(/,/g,''),10));
-      // 상품명: 같은 줄에서 금액/날짜 제거한 나머지, 없으면 직전 이름
-      let name=line.replace(amtRe,'').replace(dateRe,'').replace(mdRe,'').trim();
-      name=name.replace(/[-·|]/g,' ').trim();
-      if(!name||skip.test(name)) name=lastName;
-      if(price>=100) cands.push({price,name:name||'당근 거래',date:lastDate});
-    } else {
-      const t=line.replace(dateRe,'').trim();
-      if(t && !skip.test(t) && !dateRe.test(line)) lastName=t;
-    }
-  });
-  return cands;
-}
-
-document.getElementById('clearall').onclick=()=>{
-  pendingDelete='__ALL__';
-  document.getElementById('confirm-msg').textContent='모든 내역을 삭제할까요? 되돌릴 수 없어요.';
-  document.getElementById('confirm-ok').textContent='전체 삭제';
-  document.getElementById('confirm').showModal();
-};
-
-function toggle(id){
-  const el=document.getElementById(id); const open=el.style.display==='none';
-  el.style.display=open?'block':'none';
-  document.getElementById(id+'-t').textContent=open?'닫기 ▴':'열기 ▾';
-}
-
-
 // AI 설정 UI
-function aiPlaceholder(){ const p=document.getElementById('ai-provider').value; document.getElementById('ai-model').placeholder = p==='openai'?'gpt-4o-mini':'gemini-2.0-flash'; }
-(function(){
-  const c=aiCfg();
-  document.getElementById('ai-provider').value=c.provider||'gemini';
-  document.getElementById('ai-key').value=c.key||'';
-  document.getElementById('ai-model').value=c.model||'';
-  aiPlaceholder();
-})();
-document.getElementById('ai-provider').onchange=aiPlaceholder;
-document.getElementById('ai-save').onclick=()=>{
-  saveAiCfg({ provider:document.getElementById('ai-provider').value,
-    key:document.getElementById('ai-key').value.trim(),
-    model:document.getElementById('ai-model').value.trim() });
-  const s=document.getElementById('ai-saved'); s.textContent='✓ 저장됨'; setTimeout(()=>s.textContent='',2000);
-};
+(function(){ const c=aiCfg(); $('ai-provider').value=c.provider||'gemini'; $('ai-key').value=c.key||''; $('ai-model').value=c.model||''; })();
+$('ai-provider').onchange=()=>$('ai-model').placeholder=$('ai-provider').value==='openai'?'gpt-4o-mini':'gemini-2.0-flash';
+$('ai-save').onclick=()=>{ localStorage.setItem('ai_cfg',JSON.stringify({provider:$('ai-provider').value,key:$('ai-key').value.trim(),model:$('ai-model').value.trim()})); const s=$('ai-saved'); s.textContent='✓ 저장됨'; setTimeout(()=>s.textContent='',1500); };
 
-// 파일 선택 버튼 트리거
-document.getElementById('dg-img-btn').onclick=()=>document.getElementById('dg-img').click();
-document.getElementById('imp-btn').onclick=()=>document.getElementById('imp').click();
-// 드래그&드롭으로 캡처 받기(대체 수단)
-(function(){
-  const zone=document.getElementById('dg'); if(!zone) return;
-  ['dragover','dragenter'].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.style.outline='2px dashed var(--accent)';zone.style.outlineOffset='6px';}));
-  ['dragleave','drop'].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.style.outline='';}));
-  zone.addEventListener('drop',e=>{
-    const fs=[...((e.dataTransfer&&e.dataTransfer.files)||[])].filter(f=>f.type&&f.type.startsWith('image/'));
-    if(fs.length){ const inp=document.getElementById('dg-img'); try{const dt=new DataTransfer(); fs.forEach(f=>dt.items.add(f)); inp.files=dt.files;}catch(_){} inp.dispatchEvent(new Event('change')); }
-  });
-})();
+// =========================================================
+//  ⑤ 통계
+// =========================================================
+function renderStats(){
+  const done=sales.filter(r=>r.status!=='환불'&&r.status!=='취소');
+  let s=0,cost=0,exp=0,profit=0;
+  done.forEach(r=>{ s+=num(r.price); cost+=num(r.cost); exp+=num(r.ship)+num(r.etc); profit+=salesMargin(r); });
+  $('st-sales').textContent=won(s); $('st-profit').textContent=won(profit); $('st-cost').textContent=won(cost);
+  $('st-exp').textContent=won(exp); $('st-count').textContent=done.length+'건'; $('st-rate').textContent=(s?(profit/s*100).toFixed(1):0)+'%';
+  const by={}; done.forEach(r=>{ const m=(r.date||'').slice(0,7)||'-'; (by[m]=by[m]||{n:0,s:0,p:0}); by[m].n++; by[m].s+=num(r.price); by[m].p+=salesMargin(r); });
+  const tb=$('st-month'); tb.innerHTML='';
+  Object.keys(by).sort().reverse().forEach(m=>{ const o=by[m]; const tr=document.createElement('tr'); tr.innerHTML=`<td class="l">${m}</td><td>${o.n}</td><td>${o.s.toLocaleString()}</td><td class="pos">${o.p.toLocaleString()}</td>`; tb.appendChild(tr); });
+  if(!done.length) tb.innerHTML='<tr><td class="l hint" colspan="4">완료된 판매가 아직 없어요.</td></tr>';
+}
+
+// ---------- 공통: 삭제 확인 ----------
+let delFn=null;
+function askDel(msg,fn){ delFn=fn; $('confirm-msg').textContent=msg; $('confirm').showModal(); }
+$('confirm-no').onclick=()=>$('confirm').close();
+$('confirm-yes').onclick=()=>{ if(delFn)delFn(); delFn=null; $('confirm').close(); };
+function esc(s){ return (''+s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 // init
-document.getElementById('f-date').value=todayStr();
-previewMargin();
-render();
+$('s-date').value=today(); salesPreview(); calc(); renderSales();
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 </script>
 </body>
 </html>
