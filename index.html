@@ -575,12 +575,12 @@ async function genImages(p,out){
     renderImgSet(p,out,results, colors.map(c=>c.name).filter(Boolean));
   }catch(e){ out.innerHTML='<div class="hint mt">생성 실패: '+esc(e.message||String(e))+'</div>'; }
 }
-// 전체 저장: 공유 시트 없이 바로 다운로드 (갤러리 > 다운로드 앨범에 저장됨)
+// 전체 저장: 바로 다운로드 (첫 1회 '여러 파일 허용' 필요)
 async function saveAll(results, btn){
   const old=btn?btn.textContent:''; if(btn){btn.textContent='저장 중...';btn.disabled=true;}
-  for(const r of results){ const u=URL.createObjectURL(r.blob); const a=document.createElement('a'); a.href=u; a.download=r.name+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); await new Promise(s=>setTimeout(s,500)); setTimeout(()=>URL.revokeObjectURL(u),10000); }
+  for(const r of results){ const u=URL.createObjectURL(r.blob); const a=document.createElement('a'); a.href=u; a.download=r.name+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); await new Promise(s=>setTimeout(s,700)); setTimeout(()=>URL.revokeObjectURL(u),15000); }
   if(btn){btn.textContent=old;btn.disabled=false;}
-  toast(results.length+'장 저장됨 · 갤러리 > 다운로드 폴더 확인');
+  toast('"여러 파일 다운로드 허용"이 뜨면 꼭 "허용" (처음 1회) → 전부 저장돼요');
 }
 // 공유(카톡·퀵셰어 등으로 보내기)
 async function shareAll(results){
@@ -596,7 +596,7 @@ function renderImgSet(p,out,results,colorNames){
   const grid=document.createElement('div'); grid.className='gal'; wrap.appendChild(grid);
   results.forEach(r=>{ const url=URL.createObjectURL(r.blob); const cell=document.createElement('div'); cell.className='cell sel'; cell.innerHTML='<img src="'+url+'">'; cell.title=r.name;
     cell.onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=r.name+'.jpg'; a.click(); toast('저장: '+r.name); }; grid.appendChild(cell); });
-  const note=document.createElement('div'); note.className='hint mt'; note.textContent='이미지를 탭하면 1장씩 저장돼요.'; wrap.appendChild(note);
+  const note=document.createElement('div'); note.className='hint mt'; note.innerHTML='이미지를 탭하면 1장씩 저장돼요. 전체 저장 시 <b>"여러 파일 다운로드 허용"</b>이 뜨면 꼭 허용하세요(처음 1회).'; wrap.appendChild(note);
   const z=document.createElement('button'); z.className='btn mt'; z.textContent='📥 전체 저장 (갤러리)'; z.onclick=()=>saveAll(results, z);
   wrap.appendChild(z);
   const sh=document.createElement('button'); sh.className='ghost sm mt'; sh.style.width='100%'; sh.textContent='공유 (카톡·퀵셰어로 보내기)'; sh.onclick=()=>shareAll(results);
