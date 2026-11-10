@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>판매내역 입력 · 마진 계산기</title>
+<style>
+  *{box-sizing:border-box}
+  :root{
+    --bg:#f7f7f6; --surface:#fff; --line:#ededec; --line2:#e1e1df;
+    --txt:#1b1b1a; --muted:#8c8c88; --faint:#b6b6b2;
+    --accent:#ff6f3c; --pos:#1f8a4c; --neg:#c23b2b;
+  }
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic",sans-serif;
+    font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:840px;margin:0 auto;padding:30px 18px 100px}
+  h1{font-size:19px;font-weight:700;letter-spacing:-.01em;margin:0 0 3px}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 28px}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:36px}
+  .stat{background:var(--surface);padding:15px 16px}
+  .stat .lbl{color:var(--muted);font-size:12px;margin-bottom:4px}
+  .stat .val{font-size:18px;font-weight:700;letter-spacing:-.02em}
+  .stat .val.accent{color:var(--accent)}
+  @media(max-width:620px){.stats{grid-template-columns:repeat(2,1fr)}}
+
+  .section{margin-bottom:36px}
+  .head{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin:0 0 14px}
+  .collapse-h{cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between}
+  .t{font-size:12px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500}
+
+  label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+  input,select,textarea{background:var(--surface);border:1px solid var(--line2);color:var(--txt);
+    border-radius:10px;padding:10px 11px;font-size:15px;font-family:inherit;width:100%}
+  input::placeholder,textarea::placeholder{color:var(--faint)}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 1.8fr 1fr 1fr 1fr 1.1fr 1.1fr;gap:10px}
+  @media(max-width:620px){.grid{grid-template-columns:1fr 1fr}}
+
+  button{cursor:pointer;border:none;border-radius:10px;font-size:14px;font-weight:600;
+    padding:10px 15px;font-family:inherit;line-height:1}
+  .btn{background:var(--accent);color:#fff}
+  .btn:active{opacity:.9}
+  .ghost{background:transparent;color:var(--txt);border:1px solid var(--line2)}
+  .ghost:active{background:var(--bg)}
+  .link{background:transparent;color:var(--muted);border:none;padding:8px 6px;font-weight:500;font-size:13px}
+  .link.danger{color:var(--neg)}
+  .sm{padding:7px 11px;font-size:13px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+  .sep{flex:1}
+  .mt{margin-top:12px}
+  .hint{color:var(--muted);font-size:12.5px;line-height:1.6}
+  .hint b{color:var(--txt);font-weight:600}
+
+  .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:11px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+  tbody tr:last-child td{border-bottom:none}
+  th{color:var(--faint);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;position:sticky;top:0;background:var(--surface)}
+  td.l,th.l{text-align:left;font-variant-numeric:normal}
+  tbody tr:active{background:var(--bg)}
+  .pos{color:var(--pos)} .neg{color:var(--neg)}
+
+  .status{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);font-weight:500}
+  .status::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--faint)}
+  .s-done::before{background:var(--pos)}
+  .s-sale::before{background:var(--accent)}
+  .s-refund::before{background:var(--neg)}
+
+  .del{background:transparent;color:var(--faint);border:none;padding:4px 6px;font-size:15px}
+  .del:active{color:var(--neg)}
+
+  .cand{display:grid;grid-template-columns:auto 1.1fr 2fr 1.1fr;gap:8px;align-items:center;
+    padding:8px;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:var(--surface)}
+  .cand input{padding:7px 9px;font-size:13px}
+
+  .foot{color:var(--faint);font-size:12px;line-height:1.7;margin-top:30px}
+  dialog{background:var(--surface);color:var(--txt);border:1px solid var(--line2);border-radius:16px;
+    padding:20px;max-width:380px;width:90%;box-shadow:0 20px 50px rgba(0,0,0,.16)}
+  dialog::backdrop{background:rgba(0,0,0,.3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>판매내역</h1>
+  <div class="sub">마진 자동 계산 · 스프레드시트(CSV)·구글 시트 호환</div>
+
+  <div class="stats">
+    <div class="stat"><div class="lbl">건수</div><div class="val" id="s-count">0</div></div>
+    <div class="stat"><div class="lbl">판매가</div><div class="val" id="s-sales">0원</div></div>
+    <div class="stat"><div class="lbl">마진</div><div class="val accent" id="s-margin">0원</div></div>
+    <div class="stat"><div class="lbl">마진율</div><div class="val" id="s-rate">0%</div></div>
+  </div>
+
+  <div class="section">
+    <div class="head">새 판매 입력</div>
+    <div class="grid">
+      <label class="f">날짜<input type="date" id="f-date"></label>
+      <label class="f">상품명<input type="text" id="f-name" placeholder="데님 롱원피스"></label>
+      <label class="f">판매가<input type="number" id="f-price" placeholder="0" inputmode="numeric"></label>
+      <label class="f">원가<input type="number" id="f-cost" placeholder="0" inputmode="numeric"></label>
+      <label class="f">기타비용<input type="number" id="f-etc" placeholder="0" inputmode="numeric"></label>
+      <label class="f">결제방법
+        <select id="f-pay">
+          <option>당근페이</option><option>계좌이체</option><option>현금</option><option value="">-</option>
+        </select>
+      </label>
+      <label class="f">상태
+        <select id="f-status">
+          <option>정산완료</option><option>판매완료</option><option>판매중</option><option>예약중</option>
+          <option>환불</option><option>취소</option>
+        </select>
+      </label>
+    </div>
+    <div class="mt" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn" id="add">추가 · 마진 <span id="preview">0원</span></button>
+      <span class="hint">마진 = 판매가 − 원가 − 기타비용</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="head collapse-h" onclick="toggle('dg')">당근페이에서 가져오기 <span class="t" id="dg-t">열기 ▾</span></div>
+    <div id="dg" style="display:none">
+      <div class="hint" style="margin-bottom:14px">
+        이용내역 <b>캡처(스크린샷)</b>를 올리면 <b>입금(+) 판매 건만</b> 자동으로 추출해요. (처음 한 번 아래 <b>⚙ AI 설정</b>에서 API 키 입력 필요) 추가 전 수정 가능.
+      </div>
+      <button type="button" class="btn" id="dg-img-btn">캡처 올리기</button>
+      <input type="file" id="dg-img" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+      <div id="dg-imgstatus" class="hint mt"></div>
+      <details style="margin-top:14px">
+        <summary class="hint" style="cursor:pointer">또는 텍스트 붙여넣기</summary>
+        <textarea id="dg-text" rows="4" style="margin-top:10px" placeholder="당근페이 이용내역을 붙여넣으세요."></textarea>
+        <div class="mt" style="display:flex;gap:8px">
+          <button class="ghost sm" id="dg-parse">분석</button>
+          <button class="link" id="dg-clear">지우기</button>
+        </div>
+      </details>
+      <details id="ai-box" style="margin-top:14px">
+        <summary class="hint" style="cursor:pointer">⚙ AI 설정 (캡처 인식용 API 키)</summary>
+        <div style="margin-top:10px;display:grid;gap:8px;max-width:440px">
+          <label class="f">제공자
+            <select id="ai-provider"><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option></select>
+          </label>
+          <label class="f">API 키<input type="password" id="ai-key" placeholder="이 브라우저에만 저장돼요"></label>
+          <label class="f">모델 (비워두면 기본값)<input type="text" id="ai-model" placeholder="gemini-2.0-flash"></label>
+          <div style="display:flex;gap:8px"><button class="ghost sm" id="ai-save">저장</button><span id="ai-saved" class="hint"></span></div>
+          <div class="hint">키는 이 브라우저(localStorage)에만 저장돼요. 인식할 때 해당 AI사(구글/OpenAI)로만 직접 전송됩니다.</div>
+        </div>
+      </details>
+      <div id="dg-result"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="head" style="margin:0">판매내역 <span class="t" id="rowcount">0건</span></div>
+      <button class="link" id="sortbtn">날짜순 ⇅</button>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th class="l">날짜</th><th class="l">상품명</th><th>판매가</th><th>원가</th>
+          <th>기타</th><th>마진</th><th>누적</th><th class="l">결제</th><th class="l">상태</th><th></th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="hint mt" id="empty" style="display:none">아직 내역이 없어요. 위에서 입력하거나, 아래 "기존 385건 불러오기"를 눌러보세요.</div>
+
+    <div class="toolbar mt">
+      <button class="link" id="exp">CSV 내보내기</button>
+      <button type="button" class="link" id="imp-btn">CSV 가져오기</button>
+      <input type="file" id="imp" accept=".csv,.txt" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+      <button class="link" id="seedbtn">기존 385건 불러오기</button>
+      <span class="sep"></span>
+      <button class="link danger" id="clearall">전체 삭제</button>
+    </div>
+  </div>
+
+  <div class="foot">데이터는 이 브라우저에 자동 저장돼요. 백업은 CSV 내보내기로.<br>
+  CSV 열: 날짜 · 상품명 · 판매가 · 원가 · 기타비용 · 마진 · 누적마진 · 결제방법 · 상태<br>
+  구글 시트: CSV 내보내기 후 시트에서 파일 › 가져오기로 올리면 돼요.</div>
+</div>
+
+<dialog id="confirm">
+  <div id="confirm-msg" style="margin-bottom:18px"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="ghost sm" onclick="document.getElementById('confirm').close()">취소</button>
+    <button class="sm" id="confirm-ok" style="background:var(--neg);color:#fff">삭제</button>
+  </div>
+</dialog>
+
+<script>
+const SEED = [{"date": "2026-07-01", "name": "체크 셔츠 자켓", "price": 119012, "cost": 65000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-01", "name": "데님 롱원피스", "price": 98299, "cost": 29000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-01", "name": "A라인 데님 스커트", "price": 90648, "cost": 42000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-01", "name": "니트 집업 가디건", "price": 120174, "cost": 29000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-01", "name": "라운드 니트 베스트", "price": 118819, "cost": 73000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-02", "name": "데님 롱원피스", "price": 107856, "cost": 45000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-02", "name": "시스루 썸머 가디건", "price": 140489, "cost": 76000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-02", "name": "레이어드 뷔스티에 원피스", "price": 100981, "cost": 33000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-02", "name": "썸머 니트 베스트", "price": 108746, "cost": 50000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-02", "name": "포켓 크롭 셔츠", "price": 99223, "cost": 44000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-03", "name": "후드 니트 집업", "price": 115054, "cost": 51000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-03", "name": "셔링 미디 원피스", "price": 141911, "cost": 73000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-03", "name": "플리츠 롱스커트", "price": 143488, "cost": 70000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-03", "name": "쿨링 와이드 팬츠", "price": 112571, "cost": 46000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-03", "name": "A라인 데님 스커트", "price": 92423, "cost": 42000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-04", "name": "카라 니트 원피스", "price": 96809, "cost": 45000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-04", "name": "플리츠 롱스커트", "price": 164663, "cost": 68000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-04", "name": "세미부츠컷 데님", "price": 136857, "cost": 74000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-04", "name": "트위드 반팔 자켓", "price": 114455, "cost": 57000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-04", "name": "썸머 니트 베스트", "price": 141108, "cost": 87000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-05", "name": "데일리 코튼 팬츠", "price": 110750, "cost": 45000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-05", "name": "플리츠 롱스커트", "price": 141543, "cost": 86000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-05", "name": "셔링 미디 원피스", "price": 118933, "cost": 48000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-05", "name": "카라 니트 원피스", "price": 130049, "cost": 59000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-05", "name": "리본 타이 블라우스", "price": 112696, "cost": 57000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-06", "name": "슬림 스트레이트 데님", "price": 107179, "cost": 51000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-06", "name": "쿨링 와이드 팬츠", "price": 109575, "cost": 60000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-06", "name": "크롭 후드집업", "price": 145411, "cost": 76000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-06", "name": "반팔 크롭 니트", "price": 92081, "cost": 35000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-06", "name": "시스루 썸머 가디건", "price": 105435, "cost": 38000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-07", "name": "코튼 카고 팬츠", "price": 130298, "cost": 63000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-07", "name": "루즈핏 린넨 셔츠", "price": 136333, "cost": 74000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-07", "name": "밴딩 조거 팬츠", "price": 152043, "cost": 84000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-07", "name": "체크 셔츠 자켓", "price": 122199, "cost": 45000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-07", "name": "레이어드 뷔스티에 원피스", "price": 93081, "cost": 46000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-08", "name": "맥시 캉캉 스커트", "price": 140661, "cost": 68000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-08", "name": "니트 집업 가디건", "price": 93182, "cost": 40000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-08", "name": "시스루 썸머 가디건", "price": 151430, "cost": 76000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-08", "name": "세미부츠컷 데님", "price": 139867, "cost": 77000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-08", "name": "코튼 카고 팬츠", "price": 111106, "cost": 66000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-09", "name": "셔링 미디 원피스", "price": 89894, "cost": 33000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-09", "name": "크롭 후드집업", "price": 119414, "cost": 32000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-09", "name": "체크 셔츠 자켓", "price": 101010, "cost": 36000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-09", "name": "브이넥 퍼프 블라우스", "price": 107138, "cost": 58000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-09", "name": "라운드 니트 베스트", "price": 92665, "cost": 44000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-10", "name": "리본 타이 블라우스", "price": 146087, "cost": 69000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-10", "name": "찰랑 밴딩 슬랙스", "price": 139440, "cost": 85000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-10", "name": "코튼 카고 팬츠", "price": 96365, "cost": 35000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-10", "name": "트위드 반팔 자켓", "price": 96876, "cost": 32000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-10", "name": "레이어드 뷔스티에 원피스", "price": 118022, "cost": 65000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-11", "name": "골지 니트 가디건", "price": 117282, "cost": 49000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-11", "name": "플리츠 롱스커트", "price": 98216, "cost": 43000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-11", "name": "린넨 밴딩 반바지", "price": 107735, "cost": 59000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-11", "name": "카라 니트 원피스", "price": 127877, "cost": 36000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-11", "name": "셔링 미디 원피스", "price": 113540, "cost": 58000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-12", "name": "포켓 크롭 셔츠", "price": 127960, "cost": 54000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-12", "name": "스퀘어넥 퍼프 원피스", "price": 109956, "cost": 74000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-12", "name": "반팔 크롭 니트", "price": 130838, "cost": 69000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-12", "name": "오버핏 코튼 셔츠", "price": 123710, "cost": 53000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-12", "name": "레이어드 뷔스티에 원피스", "price": 147498, "cost": 83000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-13", "name": "린넨 밴딩 반바지", "price": 96732, "cost": 43000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-13", "name": "플리츠 롱스커트", "price": 134647, "cost": 79000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-13", "name": "라운드 니트 베스트", "price": 101350, "cost": 31000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-13", "name": "체크 셔츠 자켓", "price": 83278, "cost": 28000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-13", "name": "A라인 데님 스커트", "price": 148573, "cost": 82000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-14", "name": "썸머 니트 베스트", "price": 114293, "cost": 52000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-14", "name": "라운드넥 반팔 티셔츠", "price": 142913, "cost": 78000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-14", "name": "스퀘어넥 퍼프 원피스", "price": 105449, "cost": 55000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-14", "name": "라운드 니트 베스트", "price": 137273, "cost": 73000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-14", "name": "크롭 후드집업", "price": 98317, "cost": 40000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-15", "name": "반팔 크롭 니트", "price": 134108, "cost": 65000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-15", "name": "오버핏 맨투맨", "price": 135916, "cost": 86000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-15", "name": "코튼 카고 팬츠", "price": 94978, "cost": 31000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-15", "name": "니트 집업 가디건", "price": 134133, "cost": 82000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-15", "name": "스트라이프 셔츠", "price": 128587, "cost": 66000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-16", "name": "후드 니트 집업", "price": 112230, "cost": 54000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-16", "name": "슬림 스트레이트 데님", "price": 99924, "cost": 61000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-16", "name": "데일리 코튼 팬츠", "price": 93707, "cost": 41000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-16", "name": "데일리 코튼 팬츠", "price": 117240, "cost": 44000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-16", "name": "리본 타이 블라우스", "price": 137125, "cost": 70000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-17", "name": "플리츠 롱스커트", "price": 99360, "cost": 41000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-17", "name": "니트 집업 가디건", "price": 105637, "cost": 36000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-17", "name": "포켓 크롭 셔츠", "price": 143982, "cost": 84000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-17", "name": "트위드 반팔 자켓", "price": 112342, "cost": 46000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-17", "name": "세미부츠컷 데님", "price": 138330, "cost": 81000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-18", "name": "오버핏 코튼 셔츠", "price": 115447, "cost": 44000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-18", "name": "밴딩 조거 팬츠", "price": 129912, "cost": 75000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-18", "name": "라운드 니트 베스트", "price": 110043, "cost": 45000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-18", "name": "슬림핏 골지 티", "price": 112053, "cost": 41000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-18", "name": "레이어드 뷔스티에 원피스", "price": 114345, "cost": 71000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-19", "name": "린넨 밴딩 반바지", "price": 84615, "cost": 28000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-19", "name": "레이어드 뷔스티에 원피스", "price": 93650, "cost": 36000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-19", "name": "라운드넥 반팔 티셔츠", "price": 136008, "cost": 75000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-19", "name": "베이직 반팔 자켓", "price": 148948, "cost": 73000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-19", "name": "데님 롱원피스", "price": 92561, "cost": 28000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-20", "name": "데님 롱원피스", "price": 97643, "cost": 30000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-20", "name": "맥시 캉캉 스커트", "price": 159619, "cost": 85000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-20", "name": "골지 니트 가디건", "price": 66001, "cost": 41000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-20", "name": "트위드 반팔 자켓", "price": 84965, "cost": 34000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-20", "name": "포켓 크롭 셔츠", "price": 140937, "cost": 63000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-21", "name": "핀턱 와이드 팬츠", "price": 108558, "cost": 39000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-21", "name": "레이어드 뷔스티에 원피스", "price": 156337, "cost": 87000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-21", "name": "핀턱 와이드 팬츠", "price": 147662, "cost": 70000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-21", "name": "트위드 반팔 자켓", "price": 85098, "cost": 38000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-21", "name": "오버핏 코튼 셔츠", "price": 143816, "cost": 83000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-22", "name": "쿨링 와이드 팬츠", "price": 118884, "cost": 70000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-22", "name": "셔링 롱원피스", "price": 124634, "cost": 49000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-22", "name": "린넨 밴딩 반바지", "price": 96423, "cost": 32000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-22", "name": "린넨 밴딩 반바지", "price": 121288, "cost": 69000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-22", "name": "니트 집업 가디건", "price": 125039, "cost": 71000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-23", "name": "골지 니트 가디건", "price": 128570, "cost": 66000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-23", "name": "데님 롱원피스", "price": 122779, "cost": 74000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-23", "name": "데일리 코튼 팬츠", "price": 168041, "cost": 66000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-23", "name": "니트 집업 가디건", "price": 107851, "cost": 52000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-23", "name": "셔링 미디 원피스", "price": 89904, "cost": 44000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-24", "name": "플리츠 롱스커트", "price": 157725, "cost": 86000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-24", "name": "레이어드 뷔스티에 원피스", "price": 96055, "cost": 48000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-24", "name": "밴딩 조거 팬츠", "price": 150536, "cost": 85000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-24", "name": "맥시 캉캉 스커트", "price": 109288, "cost": 47000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-24", "name": "핀턱 와이드 팬츠", "price": 104850, "cost": 53000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-25", "name": "후드 니트 집업", "price": 113166, "cost": 47000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-25", "name": "리본 타이 블라우스", "price": 138688, "cost": 81000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-25", "name": "루즈핏 린넨 셔츠", "price": 95170, "cost": 46000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-25", "name": "카라 니트 원피스", "price": 170036, "cost": 78000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-25", "name": "슬림 스트레이트 데님", "price": 123286, "cost": 69000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-26", "name": "A라인 데님 스커트", "price": 109221, "cost": 60000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-26", "name": "후드 니트 집업", "price": 93236, "cost": 33000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-26", "name": "트위드 반팔 자켓", "price": 109988, "cost": 47000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-26", "name": "쿨링 와이드 팬츠", "price": 111138, "cost": 40000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-26", "name": "시스루 썸머 가디건", "price": 89476, "cost": 30000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-27", "name": "썸머 니트 베스트", "price": 128344, "cost": 53000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-27", "name": "트위드 반팔 자켓", "price": 93399, "cost": 69000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-27", "name": "루즈핏 린넨 셔츠", "price": 152030, "cost": 83000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-27", "name": "오버핏 코튼 셔츠", "price": 129181, "cost": 55000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-27", "name": "쿨링 와이드 팬츠", "price": 139569, "cost": 79000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-28", "name": "스퀘어넥 퍼프 원피스", "price": 111145, "cost": 61000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-28", "name": "라운드 니트 베스트", "price": 114265, "cost": 48000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-28", "name": "베이직 반팔 자켓", "price": 158699, "cost": 80000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-28", "name": "니트 집업 가디건", "price": 145472, "cost": 81000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-28", "name": "라운드 니트 베스트", "price": 147722, "cost": 85000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-29", "name": "코튼 카고 팬츠", "price": 139868, "cost": 68000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-29", "name": "트위드 반팔 자켓", "price": 115747, "cost": 56000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-29", "name": "플리츠 롱스커트", "price": 76817, "cost": 46000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-29", "name": "트위드 반팔 자켓", "price": 122229, "cost": 49000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-29", "name": "데일리 코튼 팬츠", "price": 96554, "cost": 33000, "etc": 3000, "status": "판매완료"}, {"date": "2026-07-30", "name": "핀턱 와이드 팬츠", "price": 119551, "cost": 62000, "etc": 0, "status": "판매완료"}, {"date": "2026-07-30", "name": "스퀘어넥 퍼프 원피스", "price": 101239, "cost": 31000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-30", "name": "카라 니트 원피스", "price": 107942, "cost": 54000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-30", "name": "썸머 니트 베스트", "price": 130725, "cost": 65000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-30", "name": "하이웨스트 와이드 슬랙스", "price": 140577, "cost": 84000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-31", "name": "체크 셔츠 자켓", "price": 142364, "cost": 75000, "etc": 3500, "status": "판매완료"}, {"date": "2026-07-31", "name": "체크 셔츠 자켓", "price": 115193, "cost": 66000, "etc": 4000, "status": "판매완료"}, {"date": "2026-07-31", "name": "쿨링 와이드 팬츠", "price": 101964, "cost": 42000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-31", "name": "린넨 밴딩 반바지", "price": 144437, "cost": 59000, "etc": 2500, "status": "판매완료"}, {"date": "2026-07-31", "name": "하이웨스트 와이드 슬랙스", "price": 112129, "cost": 49000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-01", "name": "리본 타이 블라우스", "price": 108533, "cost": 64000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-01", "name": "하이웨스트 와이드 슬랙스", "price": 127248, "cost": 69000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-01", "name": "데님 롱원피스", "price": 150254, "cost": 83000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-01", "name": "스퀘어넥 퍼프 원피스", "price": 99729, "cost": 31000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-01", "name": "라운드넥 반팔 티셔츠", "price": 121653, "cost": 48000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-02", "name": "A라인 데님 스커트", "price": 91399, "cost": 29000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-02", "name": "체크 셔츠 자켓", "price": 138324, "cost": 88000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-02", "name": "포켓 크롭 셔츠", "price": 124710, "cost": 69000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-02", "name": "플리츠 롱스커트", "price": 129059, "cost": 69000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-02", "name": "골지 니트 가디건", "price": 102943, "cost": 29000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-03", "name": "밴딩 조거 팬츠", "price": 136667, "cost": 88000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-03", "name": "카라 니트 원피스", "price": 139859, "cost": 72000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-03", "name": "라운드넥 반팔 티셔츠", "price": 106532, "cost": 51000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-03", "name": "세미부츠컷 데님", "price": 127045, "cost": 66000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-03", "name": "밴딩 조거 팬츠", "price": 156499, "cost": 80000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-04", "name": "플리츠 롱스커트", "price": 151829, "cost": 72000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-04", "name": "트위드 반팔 자켓", "price": 127192, "cost": 72000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-04", "name": "맥시 캉캉 스커트", "price": 123542, "cost": 71000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-04", "name": "레이스 블라우스", "price": 84841, "cost": 35000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-04", "name": "셔링 미디 원피스", "price": 97962, "cost": 30000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-05", "name": "크롭 후드집업", "price": 112142, "cost": 55000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-05", "name": "찰랑 밴딩 슬랙스", "price": 147537, "cost": 85000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-05", "name": "스퀘어넥 퍼프 원피스", "price": 91566, "cost": 37000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-05", "name": "데님 롱원피스", "price": 140676, "cost": 74000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-05", "name": "코튼 카고 팬츠", "price": 110956, "cost": 45000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-06", "name": "데일리 코튼 팬츠", "price": 118483, "cost": 43000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-06", "name": "A라인 데님 스커트", "price": 146634, "cost": 84000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-06", "name": "베이직 반팔 자켓", "price": 146383, "cost": 76000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-06", "name": "스퀘어넥 퍼프 원피스", "price": 109839, "cost": 67000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-06", "name": "썸머 니트 베스트", "price": 89843, "cost": 29000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-07", "name": "린넨 밴딩 반바지", "price": 147884, "cost": 72000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-07", "name": "린넨 밴딩 반바지", "price": 91976, "cost": 28000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-07", "name": "코튼 카고 팬츠", "price": 93729, "cost": 33000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-07", "name": "트위드 반팔 자켓", "price": 108458, "cost": 54000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-07", "name": "크롭 후드집업", "price": 134650, "cost": 76000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-08", "name": "슬림핏 골지 티", "price": 113600, "cost": 53000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-08", "name": "트위드 반팔 자켓", "price": 136164, "cost": 70000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-08", "name": "슬림 스트레이트 데님", "price": 125629, "cost": 58000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-08", "name": "라운드 니트 베스트", "price": 83156, "cost": 50000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-08", "name": "데님 롱원피스", "price": 134825, "cost": 63000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-09", "name": "셔링 롱원피스", "price": 103031, "cost": 35000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-09", "name": "체크 셔츠 자켓", "price": 129877, "cost": 72000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-09", "name": "스트라이프 셔츠", "price": 97528, "cost": 41000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-09", "name": "오버핏 맨투맨", "price": 131535, "cost": 74000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-09", "name": "슬림 스트레이트 데님", "price": 124868, "cost": 61000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-10", "name": "맥시 캉캉 스커트", "price": 151345, "cost": 73000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-10", "name": "체크 셔츠 자켓", "price": 99273, "cost": 45000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-10", "name": "골지 니트 가디건", "price": 114360, "cost": 63000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-10", "name": "슬림핏 골지 티", "price": 139794, "cost": 88000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-10", "name": "브이넥 퍼프 블라우스", "price": 158783, "cost": 83000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-11", "name": "베이직 반팔 자켓", "price": 100085, "cost": 39000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-11", "name": "반팔 크롭 니트", "price": 133401, "cost": 88000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-11", "name": "오버핏 맨투맨", "price": 128361, "cost": 80000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-11", "name": "플리츠 롱스커트", "price": 135097, "cost": 59000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-11", "name": "플리츠 롱스커트", "price": 152223, "cost": 68000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-12", "name": "밴딩 조거 팬츠", "price": 128971, "cost": 76000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-12", "name": "핀턱 와이드 팬츠", "price": 140579, "cost": 66000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-12", "name": "후드 니트 집업", "price": 123756, "cost": 77000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-12", "name": "코튼 카고 팬츠", "price": 108388, "cost": 56000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-12", "name": "베이직 반팔 자켓", "price": 172299, "cost": 83000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-13", "name": "라운드넥 반팔 티셔츠", "price": 91506, "cost": 33000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-13", "name": "세미부츠컷 데님", "price": 102632, "cost": 39000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-13", "name": "라운드 니트 베스트", "price": 103349, "cost": 38000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-13", "name": "루즈핏 린넨 셔츠", "price": 119746, "cost": 56000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-13", "name": "레이스 블라우스", "price": 107551, "cost": 46000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-14", "name": "라운드넥 반팔 티셔츠", "price": 136440, "cost": 78000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-14", "name": "슬림 스트레이트 데님", "price": 139115, "cost": 79000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-14", "name": "셔링 롱원피스", "price": 105665, "cost": 35000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-14", "name": "체크 셔츠 자켓", "price": 121585, "cost": 69000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-14", "name": "시스루 썸머 가디건", "price": 134264, "cost": 80000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-15", "name": "스퀘어넥 퍼프 원피스", "price": 121472, "cost": 47000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-15", "name": "리본 타이 블라우스", "price": 107339, "cost": 60000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-15", "name": "체크 셔츠 자켓", "price": 105454, "cost": 56000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-15", "name": "A라인 데님 스커트", "price": 106959, "cost": 30000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-15", "name": "데님 롱원피스", "price": 101936, "cost": 48000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-16", "name": "셔링 미디 원피스", "price": 128501, "cost": 76000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-16", "name": "스트라이프 셔츠", "price": 109347, "cost": 61000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-16", "name": "베이직 반팔 자켓", "price": 86992, "cost": 39000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-16", "name": "슬림 스트레이트 데님", "price": 123704, "cost": 68000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-16", "name": "크롭 후드집업", "price": 163238, "cost": 58000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-17", "name": "크롭 후드집업", "price": 129622, "cost": 70000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-17", "name": "리본 타이 블라우스", "price": 135520, "cost": 76000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-17", "name": "라운드 니트 베스트", "price": 123958, "cost": 57000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-17", "name": "A라인 데님 스커트", "price": 99921, "cost": 44000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-17", "name": "데일리 코튼 팬츠", "price": 135380, "cost": 77000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-18", "name": "셔링 롱원피스", "price": 126031, "cost": 51000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-18", "name": "후드 니트 집업", "price": 136341, "cost": 59000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-18", "name": "베이직 반팔 자켓", "price": 96862, "cost": 31000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-18", "name": "카라 니트 원피스", "price": 108037, "cost": 63000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-18", "name": "브이넥 퍼프 블라우스", "price": 101973, "cost": 56000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-19", "name": "맥시 캉캉 스커트", "price": 76945, "cost": 28000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-19", "name": "라운드 니트 베스트", "price": 103380, "cost": 33000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-19", "name": "쿨링 와이드 팬츠", "price": 138978, "cost": 86000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-19", "name": "밴딩 조거 팬츠", "price": 151383, "cost": 88000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-19", "name": "밴딩 조거 팬츠", "price": 174677, "cost": 81000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-20", "name": "트위드 반팔 자켓", "price": 126830, "cost": 63000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-20", "name": "시스루 썸머 가디건", "price": 86497, "cost": 40000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-20", "name": "레이스 블라우스", "price": 146481, "cost": 75000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-20", "name": "브이넥 퍼프 블라우스", "price": 97674, "cost": 32000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-20", "name": "린넨 밴딩 반바지", "price": 136563, "cost": 78000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-21", "name": "슬림 스트레이트 데님", "price": 134637, "cost": 70000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-21", "name": "크롭 후드집업", "price": 106816, "cost": 37000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-21", "name": "베이직 반팔 자켓", "price": 117137, "cost": 58000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-21", "name": "포켓 크롭 셔츠", "price": 121596, "cost": 63000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-21", "name": "체크 셔츠 자켓", "price": 130311, "cost": 57000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-22", "name": "골지 니트 가디건", "price": 142855, "cost": 75000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-22", "name": "오버핏 맨투맨", "price": 140681, "cost": 86000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-22", "name": "썸머 니트 베스트", "price": 145995, "cost": 70000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-22", "name": "시스루 썸머 가디건", "price": 85325, "cost": 30000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-22", "name": "브이넥 퍼프 블라우스", "price": 118188, "cost": 65000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-23", "name": "루즈핏 린넨 셔츠", "price": 68257, "cost": 37000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-23", "name": "핀턱 와이드 팬츠", "price": 121288, "cost": 69000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-23", "name": "시스루 썸머 가디건", "price": 131645, "cost": 58000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-23", "name": "라운드넥 반팔 티셔츠", "price": 140498, "cost": 67000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-23", "name": "리본 타이 블라우스", "price": 109190, "cost": 33000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-24", "name": "체크 셔츠 자켓", "price": 122766, "cost": 67000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-24", "name": "플리츠 롱스커트", "price": 135097, "cost": 68000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-24", "name": "슬림핏 골지 티", "price": 147929, "cost": 75000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-24", "name": "A라인 데님 스커트", "price": 109658, "cost": 34000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-24", "name": "오버핏 코튼 셔츠", "price": 84460, "cost": 38000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-25", "name": "찰랑 밴딩 슬랙스", "price": 86007, "cost": 37000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-25", "name": "트위드 반팔 자켓", "price": 142871, "cost": 54000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-25", "name": "셔링 미디 원피스", "price": 156103, "cost": 78000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-25", "name": "스트라이프 셔츠", "price": 93812, "cost": 39000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-25", "name": "A라인 데님 스커트", "price": 131948, "cost": 83000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-26", "name": "라운드넥 반팔 티셔츠", "price": 99391, "cost": 44000, "etc": 2500, "status": "판매완료"}, {"date": "2026-08-26", "name": "루즈핏 린넨 셔츠", "price": 122307, "cost": 57000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-26", "name": "슬림핏 골지 티", "price": 130806, "cost": 62000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-26", "name": "세미부츠컷 데님", "price": 123384, "cost": 56000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-26", "name": "포켓 크롭 셔츠", "price": 100647, "cost": 47000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-27", "name": "오버핏 코튼 셔츠", "price": 110903, "cost": 52000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-27", "name": "셔링 미디 원피스", "price": 130249, "cost": 64000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-27", "name": "슬림핏 골지 티", "price": 109469, "cost": 46000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-27", "name": "하이웨스트 와이드 슬랙스", "price": 141620, "cost": 70000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-27", "name": "리본 타이 블라우스", "price": 81195, "cost": 28000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-28", "name": "레이스 블라우스", "price": 124503, "cost": 50000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-28", "name": "쿨링 와이드 팬츠", "price": 66322, "cost": 40000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-28", "name": "후드 니트 집업", "price": 138472, "cost": 71000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-28", "name": "브이넥 퍼프 블라우스", "price": 106901, "cost": 34000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-28", "name": "골지 니트 가디건", "price": 151346, "cost": 78000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-29", "name": "핀턱 와이드 팬츠", "price": 108997, "cost": 40000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-29", "name": "브이넥 퍼프 블라우스", "price": 122955, "cost": 62000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-29", "name": "찰랑 밴딩 슬랙스", "price": 126408, "cost": 60000, "etc": 3000, "status": "판매완료"}, {"date": "2026-08-29", "name": "린넨 밴딩 반바지", "price": 88093, "cost": 38000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-29", "name": "라운드넥 반팔 티셔츠", "price": 155991, "cost": 88000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-30", "name": "시스루 썸머 가디건", "price": 77707, "cost": 42000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-30", "name": "리본 타이 블라우스", "price": 156521, "cost": 79000, "etc": 4000, "status": "판매완료"}, {"date": "2026-08-30", "name": "라운드 니트 베스트", "price": 87671, "cost": 33000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-30", "name": "리본 타이 블라우스", "price": 115427, "cost": 44000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-30", "name": "체크 셔츠 자켓", "price": 126463, "cost": 57000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-31", "name": "오버핏 코튼 셔츠", "price": 112547, "cost": 42000, "etc": 3500, "status": "판매완료"}, {"date": "2026-08-31", "name": "오버핏 맨투맨", "price": 136543, "cost": 67000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-31", "name": "라운드 니트 베스트", "price": 153031, "cost": 86000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-31", "name": "후드 니트 집업", "price": 122590, "cost": 69000, "etc": 0, "status": "판매완료"}, {"date": "2026-08-31", "name": "플리츠 롱스커트", "price": 123366, "cost": 80000, "etc": 3500, "status": "판매완료"}, {"date": "2026-09-01", "name": "골지 니트 가디건", "price": 126972, "cost": 59000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-01", "name": "밴딩 조거 팬츠", "price": 97902, "cost": 43000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-01", "name": "체크 셔츠 자켓", "price": 88267, "cost": 52000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-01", "name": "스퀘어넥 퍼프 원피스", "price": 144798, "cost": 70000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-01", "name": "체크 셔츠 자켓", "price": 133774, "cost": 65000, "etc": 2500, "status": "판매완료"}, {"date": "2026-09-02", "name": "린넨 밴딩 반바지", "price": 129843, "cost": 72000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-02", "name": "찰랑 밴딩 슬랙스", "price": 106063, "cost": 56000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-02", "name": "베이직 반팔 자켓", "price": 156013, "cost": 82000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-02", "name": "찰랑 밴딩 슬랙스", "price": 129594, "cost": 71000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-02", "name": "찰랑 밴딩 슬랙스", "price": 156809, "cost": 85000, "etc": 3000, "status": "판매완료"}, {"date": "2026-09-03", "name": "카라 니트 원피스", "price": 129546, "cost": 68000, "etc": 3500, "status": "판매완료"}, {"date": "2026-09-03", "name": "레이스 블라우스", "price": 85040, "cost": 31000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-03", "name": "레이어드 뷔스티에 원피스", "price": 126306, "cost": 36000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-03", "name": "셔링 미디 원피스", "price": 88753, "cost": 32000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-03", "name": "라운드 니트 베스트", "price": 111984, "cost": 65000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-04", "name": "브이넥 퍼프 블라우스", "price": 99634, "cost": 44000, "etc": 3000, "status": "판매완료"}, {"date": "2026-09-04", "name": "스트라이프 셔츠", "price": 125766, "cost": 70000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-04", "name": "하이웨스트 와이드 슬랙스", "price": 66536, "cost": 28000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-04", "name": "포켓 크롭 셔츠", "price": 153642, "cost": 78000, "etc": 4000, "status": "판매완료"}, {"date": "2026-09-04", "name": "트위드 반팔 자켓", "price": 124498, "cost": 48000, "etc": 3000, "status": "판매완료"}, {"date": "2026-09-05", "name": "오버핏 맨투맨", "price": 133195, "cost": 77000, "etc": 2500, "status": "판매완료"}, {"date": "2026-09-05", "name": "찰랑 밴딩 슬랙스", "price": 153243, "cost": 65000, "etc": 3000, "status": "판매완료"}, {"date": "2026-09-05", "name": "오버핏 코튼 셔츠", "price": 109217, "cost": 60000, "etc": 2500, "status": "판매완료"}, {"date": "2026-09-05", "name": "쿨링 와이드 팬츠", "price": 83709, "cost": 30000, "etc": 3000, "status": "판매완료"}, {"date": "2026-09-05", "name": "코튼 카고 팬츠", "price": 106153, "cost": 57000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-06", "name": "크롭 후드집업", "price": 136493, "cost": 86000, "etc": 3500, "status": "판매완료"}, {"date": "2026-09-06", "name": "베이직 반팔 자켓", "price": 131020, "cost": 85000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-06", "name": "A라인 데님 스커트", "price": 126695, "cost": 66000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-06", "name": "시스루 썸머 가디건", "price": 115608, "cost": 36000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-06", "name": "린넨 밴딩 반바지", "price": 143764, "cost": 68000, "etc": 3000, "status": "판매완료"}, {"date": "2026-09-07", "name": "오버핏 코튼 셔츠", "price": 138968, "cost": 72000, "etc": 4000, "status": "판매완료"}, {"date": "2026-09-07", "name": "밴딩 조거 팬츠", "price": 130481, "cost": 69000, "etc": 4000, "status": "판매완료"}, {"date": "2026-09-07", "name": "라운드 니트 베스트", "price": 154835, "cost": 83000, "etc": 3500, "status": "판매완료"}, {"date": "2026-09-07", "name": "카라 니트 원피스", "price": 114155, "cost": 56000, "etc": 2500, "status": "판매완료"}, {"date": "2026-09-07", "name": "쿨링 와이드 팬츠", "price": 111242, "cost": 49000, "etc": 2500, "status": "판매완료"}, {"date": "2026-09-08", "name": "라운드넥 반팔 티셔츠", "price": 103649, "cost": 37000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-08", "name": "오버핏 맨투맨", "price": 101907, "cost": 33000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-08", "name": "A라인 데님 스커트", "price": 113065, "cost": 55000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-08", "name": "오버핏 코튼 셔츠", "price": 137131, "cost": 75000, "etc": 3500, "status": "판매완료"}, {"date": "2026-09-08", "name": "찰랑 밴딩 슬랙스", "price": 99860, "cost": 36000, "etc": 4000, "status": "판매완료"}, {"date": "2026-09-09", "name": "데님 롱원피스", "price": 153405, "cost": 86000, "etc": 4000, "status": "판매완료"}, {"date": "2026-09-09", "name": "반팔 크롭 니트", "price": 131242, "cost": 66000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-09", "name": "맥시 캉캉 스커트", "price": 98217, "cost": 34000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-09", "name": "셔링 미디 원피스", "price": 90965, "cost": 41000, "etc": 3000, "status": "판매완료"}, {"date": "2026-09-09", "name": "시스루 썸머 가디건", "price": 124902, "cost": 58000, "etc": 3500, "status": "판매완료"}, {"date": "2026-09-10", "name": "셔링 미디 원피스", "price": 151701, "cost": 79000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-10", "name": "데님 롱원피스", "price": 115546, "cost": 63000, "etc": 4000, "status": "판매완료"}, {"date": "2026-09-10", "name": "후드 니트 집업", "price": 146763, "cost": 71000, "etc": 3000, "status": "판매완료"}, {"date": "2026-09-10", "name": "라운드 니트 베스트", "price": 122472, "cost": 66000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-10", "name": "린넨 밴딩 반바지", "price": 80866, "cost": 39000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-11", "name": "셔링 미디 원피스", "price": 126482, "cost": 53000, "etc": 3500, "status": "판매완료"}, {"date": "2026-09-11", "name": "플리츠 롱스커트", "price": 119687, "cost": 75000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-11", "name": "하이웨스트 와이드 슬랙스", "price": 131135, "cost": 75000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-11", "name": "코튼 카고 팬츠", "price": 120026, "cost": 52000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-11", "name": "핀턱 와이드 팬츠", "price": 106624, "cost": 49000, "etc": 2500, "status": "판매완료"}, {"date": "2026-09-12", "name": "세미부츠컷 데님", "price": 126211, "cost": 67000, "etc": 4000, "status": "판매완료"}, {"date": "2026-09-12", "name": "반팔 크롭 니트", "price": 105145, "cost": 33000, "etc": 3500, "status": "판매완료"}, {"date": "2026-09-12", "name": "린넨 밴딩 반바지", "price": 128129, "cost": 70000, "etc": 2500, "status": "판매완료"}, {"date": "2026-09-12", "name": "데님 롱원피스", "price": 125625, "cost": 66000, "etc": 2500, "status": "판매완료"}, {"date": "2026-09-12", "name": "베이직 반팔 자켓", "price": 101047, "cost": 45000, "etc": 2500, "status": "판매완료"}, {"date": "2026-09-13", "name": "코튼 카고 팬츠", "price": 105999, "cost": 47000, "etc": 3500, "status": "판매완료"}, {"date": "2026-09-13", "name": "골지 니트 가디건", "price": 101729, "cost": 53000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-13", "name": "레이스 블라우스", "price": 89788, "cost": 28000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-13", "name": "카라 니트 원피스", "price": 157737, "cost": 88000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-13", "name": "카라 니트 원피스", "price": 96310, "cost": 36000, "etc": 4000, "status": "판매완료"}, {"date": "2026-09-14", "name": "스트라이프 셔츠", "price": 149502, "cost": 52000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-14", "name": "체크 셔츠 자켓", "price": 99984, "cost": 42000, "etc": 3500, "status": "판매완료"}, {"date": "2026-09-14", "name": "니트 집업 가디건", "price": 139751, "cost": 81000, "etc": 3000, "status": "판매완료"}, {"date": "2026-09-14", "name": "포켓 크롭 셔츠", "price": 101931, "cost": 53000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-14", "name": "골지 니트 가디건", "price": 84872, "cost": 29000, "etc": 2500, "status": "판매완료"}, {"date": "2026-09-15", "name": "슬림핏 골지 티", "price": 100551, "cost": 53000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-15", "name": "하이웨스트 와이드 슬랙스", "price": 111249, "cost": 38000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-15", "name": "후드 니트 집업", "price": 138758, "cost": 81000, "etc": 2500, "status": "판매완료"}, {"date": "2026-09-15", "name": "찰랑 밴딩 슬랙스", "price": 115141, "cost": 55000, "etc": 0, "status": "판매완료"}, {"date": "2026-09-15", "name": "오버핏 코튼 셔츠", "price": 118866, "cost": 55000, "etc": 0, "status": "판매완료"}];
+const KEY = 'sales_app_v1';
+let rows = load();
+
+function load(){ try{ const r=JSON.parse(localStorage.getItem(KEY)); return Array.isArray(r)?r:[]; }catch(e){ return []; } }
+function save(){ localStorage.setItem(KEY, JSON.stringify(rows)); }
+function won(n){ return (Math.round(n)).toLocaleString('ko-KR')+'원'; }
+function num(v){ v=(''+(v??'')).replace(/[^0-9.-]/g,''); const n=parseFloat(v); return isNaN(n)?0:n; }
+function todayStr(){ const d=new Date(); const o=d.getTimezoneOffset(); const t=new Date(d-o*60000); return t.toISOString().slice(0,10); }
+function margin(r){ return num(r.price)-num(r.cost)-num(r.etc); }
+
+function statusClass(s){ if(s==='판매완료'||s==='정산완료')return 's-done'; if(s==='판매중'||s==='예약중')return 's-sale'; if(s==='환불'||s==='취소')return 's-refund'; return 's-etc'; }
+
+function render(){
+  rows.forEach(r=>{ if(!r.id) r.id = Math.random().toString(36).slice(2); });
+  const tb=document.getElementById('tbody'); tb.innerHTML='';
+  let cum=0, totalSales=0, totalMargin=0, cnt=0;
+  rows.forEach((r)=>{
+    const m=margin(r);
+    const counts = r.status!=='환불' && r.status!=='취소';
+    if(counts){ cum+=m; totalSales+=num(r.price); totalMargin+=m; cnt++; }
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td class="l">${r.date||''}</td>
+      <td class="l">${escape(r.name||'')}</td>
+      <td>${num(r.price).toLocaleString()}</td>
+      <td>${num(r.cost).toLocaleString()}</td>
+      <td>${num(r.etc).toLocaleString()}</td>
+      <td class="${m>=0?'pos':'neg'}">${m.toLocaleString()}</td>
+      <td>${counts?cum.toLocaleString():'-'}</td>
+      <td class="l" style="color:var(--muted)">${escape(r.pay||'')}</td>
+      <td class="l"><span class="status ${statusClass(r.status)}">${r.status||''}</span></td>
+      <td><button class="del" data-id="${r.id}">✕</button></td>`;
+    tr.querySelector('td:nth-child(2)').style.cursor='pointer';
+    tr.querySelector('td:nth-child(2)').onclick=()=>editRow(r.id);
+    tr.querySelector('td:nth-child(3)').style.cursor='pointer';
+    tr.querySelector('td:nth-child(3)').onclick=()=>editRow(r.id);
+    tb.appendChild(tr);
+  });
+  document.querySelectorAll('.del').forEach(b=>b.onclick=()=>askDelete(b.dataset.id));
+  document.getElementById('s-count').textContent=cnt+'건';
+  document.getElementById('s-sales').textContent=won(totalSales);
+  document.getElementById('s-margin').textContent=won(totalMargin);
+  document.getElementById('s-rate').textContent=(totalSales? (totalMargin/totalSales*100).toFixed(1):0)+'%';
+  document.getElementById('rowcount').textContent=rows.length+'건';
+  document.getElementById('empty').style.display=rows.length?'none':'block';
+  save();
+}
+function escape(s){ return (''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function editRow(id){
+  const r=rows.find(x=>x.id===id); if(!r)return;
+  const name=prompt('상품명',r.name)??r.name;
+  const price=prompt('판매가',num(r.price))??r.price;
+  const cost=prompt('원가(공급가)',num(r.cost))??r.cost;
+  const etc=prompt('기타비용',num(r.etc))??r.etc;
+  r.name=name; r.price=num(price); r.cost=num(cost); r.etc=num(etc);
+  render();
+}
+
+let pendingDelete=null;
+function askDelete(id){
+  pendingDelete=id;
+  const r=rows.find(x=>x.id===id);
+  document.getElementById('confirm-msg').textContent=`"${r?r.name:''}" 내역을 삭제할까요?`;
+  document.getElementById('confirm-ok').textContent='삭제';
+  document.getElementById('confirm').showModal();
+}
+document.getElementById('confirm-ok').onclick=()=>{
+  if(pendingDelete==='__ALL__'){ rows=[]; }
+  else { rows=rows.filter(x=>x.id!==pendingDelete); }
+  pendingDelete=null; document.getElementById('confirm').close(); render();
+};
+
+// 입력
+function previewMargin(){
+  const m=num(pval('f-price'))-num(pval('f-cost'))-num(pval('f-etc'));
+  document.getElementById('preview').textContent=won(m);
+}
+function pval(id){ return document.getElementById(id).value; }
+['f-price','f-cost','f-etc'].forEach(id=>document.getElementById(id).addEventListener('input',previewMargin));
+
+document.getElementById('add').onclick=()=>{
+  const name=pval('f-name').trim();
+  if(!name){ alert('상품명을 입력하세요'); return; }
+  rows.push({ id:Math.random().toString(36).slice(2),
+    date:pval('f-date')||todayStr(), name,
+    price:num(pval('f-price')), cost:num(pval('f-cost')), etc:num(pval('f-etc')),
+    pay:pval('f-pay'), status:pval('f-status') });
+  sortByDate();
+  ['f-name','f-price','f-cost','f-etc'].forEach(id=>document.getElementById(id).value='');
+  previewMargin(); render();
+  document.getElementById('f-name').focus();
+};
+
+// 정렬
+let sortAsc=true;
+function sortByDate(){ rows.sort((a,b)=> (a.date||'').localeCompare(b.date||'')); }
+document.getElementById('sortbtn').onclick=()=>{
+  sortAsc=!sortAsc;
+  rows.sort((a,b)=> sortAsc ? (a.date||'').localeCompare(b.date||'') : (b.date||'').localeCompare(a.date||''));
+  render();
+};
+
+// CSV
+const HEAD=['날짜','상품명','판매가','원가(공급가)','기타비용','마진','누적마진','결제방법','판매상태'];
+function buildCSV(){
+  sortByDate();
+  let cum=0; const lines=[HEAD.join(',')];
+  rows.forEach(r=>{ const m=margin(r); const counts=r.status!=='환불'&&r.status!=='취소'; if(counts)cum+=m;
+    lines.push([r.date,csv(r.name),num(r.price),num(r.cost),num(r.etc),m,counts?cum:'',csv(r.pay||''),r.status].join(','));
+  });
+  return '﻿'+lines.join('\r\n');
+}
+function fallbackDownload(fn,text){
+  const blob=new Blob([text],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fn; a.click();
+}
+document.getElementById('exp').onclick=()=>{ fallbackDownload('판매내역_'+todayStr()+'.csv', buildCSV()); };
+function csv(s){ s=''+(s??''); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
+
+document.getElementById('imp').onchange=(e)=>{
+  const file=e.target.files[0]; if(!file)return;
+  const rd=new FileReader();
+  rd.onload=()=>{ importCSV(rd.result); e.target.value=''; };
+  rd.readAsText(file,'utf-8');
+};
+function parseCSVLine(line){
+  const out=[]; let cur='',q=false;
+  for(let i=0;i<line.length;i++){ const c=line[i];
+    if(q){ if(c=='"'){ if(line[i+1]=='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else { if(c=='"')q=true; else if(c==','){out.push(cur);cur='';} else cur+=c; }
+  } out.push(cur); return out;
+}
+function importCSV(text){
+  text=text.replace(/^﻿/,'');
+  const raw=text.split(/\r?\n/).filter(l=>l.trim()!=='');
+  let added=0;
+  raw.forEach(line=>{
+    const c=parseCSVLine(line).map(x=>x.trim());
+    if(c.length<3) return;
+    const joined=c.join('');
+    if(joined.includes('마진계산기')) return;         // 제목행
+    if(c[0]==='날짜'||c[1]==='상품명') return;          // 헤더행
+    const date=/\d{4}[-./]\d{1,2}[-./]\d{1,2}/.test(c[0])?c[0].replace(/[./]/g,'-'):c[0];
+    const name=c[1]; if(!name) return;
+    // 9열(결제방법 포함): pay=c[7], status=c[8]  /  8열(구버전): status=c[7]
+    const hasPay=c.length>=9;
+    const pay=hasPay?(c[7]||''):'';
+    const status=(hasPay?c[8]:c[7])||'판매완료';
+    rows.push({ id:Math.random().toString(36).slice(2), date, name,
+      price:num(c[2]), cost:num(c[3]), etc:num(c[4]||0),
+      pay, status });
+    added++;
+  });
+  sortByDate(); render();
+  alert(added+'건을 불러왔어요.');
+}
+
+// 당근페이 파서
+function showCandidates(cands){
+  const box=document.getElementById('dg-result'); box.innerHTML='';
+  if(!cands.length){ box.innerHTML='<div class="hint mt">입금(판매) 내역을 찾지 못했어요. 다른 캡처를 올리거나 텍스트로 붙여넣어 보세요.</div>'; return; }
+  const head=document.createElement('div'); head.className='hint mt';
+  head.innerHTML=`<b>${cands.length}건</b>의 입금(판매)을 찾았어요 — 확인/수정 후 "선택 추가".`;
+  box.appendChild(head);
+  cands.forEach((c,i)=>{
+    const d=document.createElement('div'); d.className='cand';
+    d.innerHTML=`<input type="checkbox" checked data-i="${i}" class="cc" style="width:auto">
+      <input type="date" value="${c.date||todayStr()}" data-i="${i}" class="cd">
+      <input type="text" value="${escape(c.name||'')}" data-i="${i}" class="cn" placeholder="상품명">
+      <input type="number" value="${num(c.price)}" data-i="${i}" class="cp">`;
+    box.appendChild(d);
+  });
+  const btn=document.createElement('button'); btn.className='btn mt'; btn.textContent='선택 추가';
+  btn.onclick=()=>{
+    let added=0;
+    [...document.querySelectorAll('.cc')].forEach(ch=>{ if(!ch.checked)return; const i=ch.dataset.i;
+      const date=document.querySelector(`.cd[data-i="${i}"]`).value||todayStr();
+      const name=document.querySelector(`.cn[data-i="${i}"]`).value.trim()||'당근 거래';
+      const price=num(document.querySelector(`.cp[data-i="${i}"]`).value);
+      rows.push({ id:Math.random().toString(36).slice(2), date, name, price, cost:0, etc:0, pay:'당근페이', status:'정산완료' });
+      added++;
+    });
+    sortByDate(); render();
+    box.innerHTML=`<div class="hint mt">✅ ${added}건 추가됨 (날짜=정산일, 상태=정산완료). 원가는 테이블에서 상품명·판매가를 눌러 입력하세요.</div>`;
+  };
+  box.appendChild(btn);
+}
+
+// 텍스트 붙여넣기 분석
+document.getElementById('dg-parse').onclick=()=>{ showCandidates(parseKarrot(document.getElementById('dg-text').value)); };
+document.getElementById('dg-clear').onclick=()=>{ document.getElementById('dg-text').value=''; document.getElementById('dg-result').innerHTML=''; };
+
+// 캡처(스크린샷) 분석 — Claude 이미지 분석 사용, 입금(+)만
+const DG_PROMPT = `다음 이미지는 한국 당근페이 '이용내역' 스크린샷입니다.
+내가 물건을 팔아서 받은 '입금' 건만 추출하세요.
+- 포함: 금액이 +로 표시된(초록색) 상품 거래 (예: 상품명과 +4,000원)
+- 제외: 금액이 -인 출금/구매, 은행계좌 이체(예: '국민 3768' 등 은행명/계좌/카드 표시), '충전', '혜택'
+날짜는 화면의 '2026년 11월' 같은 월 구분과 '11.08' 같은 표기를 합쳐 YYYY-MM-DD로 만드세요.
+금액은 숫자만(원과 콤마 제거).
+오직 JSON 배열만 출력. 예: [{"date":"2026-11-08","name":"리본 슬리퍼","price":4000}]
+입금 건이 없으면 [] 만 출력.`;
+
+// ===== 본인 AI API 키로 캡처 인식 =====
+function aiCfg(){ try{return JSON.parse(localStorage.getItem('ai_cfg'))||{};}catch(e){return {};} }
+function saveAiCfg(c){ localStorage.setItem('ai_cfg', JSON.stringify(c)); }
+function fileToB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
+function extractArr(t){ const s=t.indexOf('['), e=t.lastIndexOf(']'); if(s<0||e<0) throw new Error('결과에서 JSON 배열을 찾지 못했어요'); return JSON.parse(t.slice(s,e+1)); }
+
+async function callVision(file){
+  const c=aiCfg(); if(!c.key) throw new Error('NO_KEY');
+  const b64=await fileToB64(file); const mime=file.type||'image/jpeg';
+  if((c.provider||'gemini')==='openai'){
+    const model=c.model||'gpt-4o-mini';
+    const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.key},
+      body:JSON.stringify({model,messages:[{role:'user',content:[
+        {type:'text',text:DG_PROMPT},
+        {type:'image_url',image_url:{url:'data:'+mime+';base64,'+b64}}]}]})});
+    if(!r.ok) throw new Error('OpenAI '+r.status+' · '+(await r.text()).slice(0,160));
+    const j=await r.json(); return extractArr(j.choices[0].message.content||'');
+  } else {
+    const model=c.model||'gemini-2.0-flash';
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(c.key),
+      {method:'POST',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({contents:[{parts:[{text:DG_PROMPT},{inline_data:{mime_type:mime,data:b64}}]}],
+         generationConfig:{response_mime_type:'application/json'}})});
+    if(!r.ok) throw new Error('Gemini '+r.status+' · '+(await r.text()).slice(0,160));
+    const j=await r.json();
+    const txt=(((j.candidates||[])[0]||{}).content||{}).parts?.map(p=>p.text||'').join('')||'';
+    return extractArr(txt);
+  }
+}
+
+document.getElementById('dg-img').onchange=async (e)=>{
+  const files=[...(e.target.files||[])]; e.target.value='';
+  if(!files.length) return;
+  const st=document.getElementById('dg-imgstatus');
+  if(!aiCfg().key){ st.innerHTML='먼저 아래 <b>⚙ AI 설정</b>에서 API 키를 입력하세요.'; const b=document.getElementById('ai-box'); if(b) b.open=true; return; }
+  st.textContent='⏳ 캡처에서 입금(판매) 내역을 읽는 중...';
+  try{
+    let all=[];
+    for(const f of files){ const arr=await callVision(f); if(Array.isArray(arr)) all=all.concat(arr); }
+    st.textContent='✅ '+all.length+'건 인식 — 확인 후 추가하세요.';
+    showCandidates(all.map(x=>({date:x&&x.date,name:x&&x.name,price:x&&x.price})));
+  }catch(err){
+    const m=(err&&err.message)||'';
+    if(m==='NO_KEY'){ st.innerHTML='먼저 <b>⚙ AI 설정</b>에서 API 키를 입력하세요.'; const b=document.getElementById('ai-box'); if(b) b.open=true; }
+    else st.textContent='인식 실패: '+m;
+  }
+};
+
+function parseKarrot(text){
+  const lines=text.split(/\n/).map(l=>l.trim());
+  const amtRe=/-?\s*₩?\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,})\s*원?/;
+  const dateRe=/(20\d{2})[.\-\/년]\s*(\d{1,2})[.\-\/월]\s*(\d{1,2})/;
+  const mdRe=/(^|\s)(\d{1,2})[.\-\/월]\s*(\d{1,2})일?/;
+  const skip=/^(입금|출금|결제|송금|당근페이|이용내역|충전|전체|더보기|완료|대기)$/;
+  const cands=[]; let lastDate=todayStr(); let lastName='';
+  lines.forEach(line=>{
+    if(!line){ return; }
+    const dm=line.match(dateRe);
+    if(dm){ lastDate=`${dm[1]}-${String(dm[2]).padStart(2,'0')}-${String(dm[3]).padStart(2,'0')}`; }
+    else { const md=line.match(mdRe); if(md){ const y=new Date().getFullYear(); lastDate=`${y}-${String(md[2]).padStart(2,'0')}-${String(md[3]).padStart(2,'0')}`; } }
+    const am=line.match(amtRe);
+    if(am){
+      const price=Math.abs(parseInt(am[1].replace(/,/g,''),10));
+      // 상품명: 같은 줄에서 금액/날짜 제거한 나머지, 없으면 직전 이름
+      let name=line.replace(amtRe,'').replace(dateRe,'').replace(mdRe,'').trim();
+      name=name.replace(/[-·|]/g,' ').trim();
+      if(!name||skip.test(name)) name=lastName;
+      if(price>=100) cands.push({price,name:name||'당근 거래',date:lastDate});
+    } else {
+      const t=line.replace(dateRe,'').trim();
+      if(t && !skip.test(t) && !dateRe.test(line)) lastName=t;
+    }
+  });
+  return cands;
+}
+
+// 시드/초기화
+document.getElementById('seedbtn').onclick=()=>{
+  if(rows.length && !confirm('기존 385건을 현재 목록에 추가할까요? (중복될 수 있어요)')) return;
+  SEED.forEach(s=>rows.push({ id:Math.random().toString(36).slice(2),
+    date:s.date, name:s.name, price:s.price, cost:s.cost, etc:s.etc, pay:'당근페이', status:s.status }));
+  sortByDate(); render();
+};
+document.getElementById('clearall').onclick=()=>{
+  pendingDelete='__ALL__';
+  document.getElementById('confirm-msg').textContent='모든 내역을 삭제할까요? 되돌릴 수 없어요.';
+  document.getElementById('confirm-ok').textContent='전체 삭제';
+  document.getElementById('confirm').showModal();
+};
+
+function toggle(id){
+  const el=document.getElementById(id); const open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  document.getElementById(id+'-t').textContent=open?'닫기 ▴':'열기 ▾';
+}
+
+
+// AI 설정 UI
+function aiPlaceholder(){ const p=document.getElementById('ai-provider').value; document.getElementById('ai-model').placeholder = p==='openai'?'gpt-4o-mini':'gemini-2.0-flash'; }
+(function(){
+  const c=aiCfg();
+  document.getElementById('ai-provider').value=c.provider||'gemini';
+  document.getElementById('ai-key').value=c.key||'';
+  document.getElementById('ai-model').value=c.model||'';
+  aiPlaceholder();
+})();
+document.getElementById('ai-provider').onchange=aiPlaceholder;
+document.getElementById('ai-save').onclick=()=>{
+  saveAiCfg({ provider:document.getElementById('ai-provider').value,
+    key:document.getElementById('ai-key').value.trim(),
+    model:document.getElementById('ai-model').value.trim() });
+  const s=document.getElementById('ai-saved'); s.textContent='✓ 저장됨'; setTimeout(()=>s.textContent='',2000);
+};
+
+// 파일 선택 버튼 트리거
+document.getElementById('dg-img-btn').onclick=()=>document.getElementById('dg-img').click();
+document.getElementById('imp-btn').onclick=()=>document.getElementById('imp').click();
+// 드래그&드롭으로 캡처 받기(대체 수단)
+(function(){
+  const zone=document.getElementById('dg'); if(!zone) return;
+  ['dragover','dragenter'].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.style.outline='2px dashed var(--accent)';zone.style.outlineOffset='6px';}));
+  ['dragleave','drop'].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.style.outline='';}));
+  zone.addEventListener('drop',e=>{
+    const fs=[...((e.dataTransfer&&e.dataTransfer.files)||[])].filter(f=>f.type&&f.type.startsWith('image/'));
+    if(fs.length){ const inp=document.getElementById('dg-img'); try{const dt=new DataTransfer(); fs.forEach(f=>dt.items.add(f)); inp.files=dt.files;}catch(_){} inp.dispatchEvent(new Event('change')); }
+  });
+})();
+
+// init
+document.getElementById('f-date').value=todayStr();
+previewMargin();
+render();
+</script>
+</body>
+</html>
