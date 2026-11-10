@@ -495,7 +495,8 @@ colors: 색상 그룹 배열. 각 {"name":"한글 색상명","indexes":[그 색 
 detail: 원단·포켓·지퍼·밴딩·봉제 등 클로즈업 디테일 사진 번호들.
 model: 사람이 착용한 사진 번호들.
 groupShot: 여러 색이 한 장에 같이 나온 사진 번호(없으면 -1).
-오직 JSON만: {"colors":[{"name":"","indexes":[],"best":0}],"detail":[],"model":[],"groupShot":-1}`;
+sizeChart: 사이즈표·치수(cm, 총장·허리 등 숫자) 이미지 번호(없으면 -1).
+오직 JSON만: {"colors":[{"name":"","indexes":[],"best":0}],"detail":[],"model":[],"groupShot":-1,"sizeChart":-1}`;
 
 function loadImg(url){ return new Promise((res,rej)=>{ const im=new Image(); im.crossOrigin='anonymous'; im.onload=()=>res(im); im.onerror=()=>rej(new Error('img')); im.src=API+'/api/image?src='+encodeURIComponent(url); }); }
 function newCanvas(s){ s=s||1080; const c=document.createElement('canvas'); c.width=c.height=s; const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,s,s); return [c,x]; }
@@ -551,6 +552,8 @@ async function genImages(p,out){
     results.push({name:'04_광고형', blob:await cAd(adbg, (p.gen&&p.gen.title)||p.name, num(p.sell))});
     // ⑤ 모델형
     const m1=pick((data.model||[])[0]) || adbg; if(m1) results.push({name:'05_모델착용', blob:await cContain(m1)});
+    // ⑥ 사이즈표
+    if(data.sizeChart>=0 && pick(data.sizeChart)) results.push({name:'06_사이즈', blob:await cContain(pick(data.sizeChart))});
 
     renderImgSet(p,out,results, colors.map(c=>c.name).filter(Boolean));
   }catch(e){ out.innerHTML='<div class="hint mt">생성 실패: '+esc(e.message||String(e))+'</div>'; }
