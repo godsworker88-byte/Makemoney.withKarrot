@@ -345,7 +345,7 @@ function renderProducts(){
         <label class="f">판매가<input type="number" inputmode="numeric" data-f="sell" data-id="${p.id}" value="${num(p.sell)||''}" placeholder="0"></label>
       </div>
       <div class="row" style="justify-content:space-between">
-        <span class="hint">예상순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · 마진율 <b>${rate.toFixed(1)}%</b></span>
+        <span class="hint" data-calc="${p.id}">예상순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · 마진율 <b>${rate.toFixed(1)}%</b></span>
         <select data-f="status" data-id="${p.id}" style="width:auto;padding:7px 10px;font-size:13px">
           ${['준비중','판매중','판매완료','보류'].map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join('')}
         </select>
@@ -356,8 +356,14 @@ function renderProducts(){
       </div>`;
     box.appendChild(c);
   });
-  box.querySelectorAll('input[data-f],select[data-f]').forEach(el=>{
-    el.oninput=el.onchange=()=>{ const p=products.find(x=>x.id===el.dataset.id); if(!p)return; p[el.dataset.f]=el.value; saveProducts(); if(el.dataset.f!=='status') renderProducts(); };
+  const updateCalc=(p)=>{ const el=box.querySelector(`[data-calc="${p.id}"]`); if(!el)return;
+    const profit=num(p.sell)-num(p.buy)-num(p.ship); const rate=num(p.sell)?profit/num(p.sell)*100:0;
+    el.innerHTML=`예상순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · 마진율 <b>${rate.toFixed(1)}%</b>`; };
+  box.querySelectorAll('input[data-f]').forEach(el=>{
+    el.oninput=()=>{ const p=products.find(x=>x.id===el.dataset.id); if(!p)return; p[el.dataset.f]=el.value; saveProducts(); updateCalc(p); };
+  });
+  box.querySelectorAll('select[data-f]').forEach(el=>{
+    el.onchange=()=>{ const p=products.find(x=>x.id===el.dataset.id); if(!p)return; p[el.dataset.f]=el.value; saveProducts(); };
   });
   box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>askDel('이 상품을 삭제할까요?',()=>{ products=products.filter(x=>x.id!==b.dataset.del); saveProducts(); renderProducts(); }));
   box.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>{ const p=products.find(x=>x.id===b.dataset.sell); if(!p)return;
