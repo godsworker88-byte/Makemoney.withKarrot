@@ -265,10 +265,17 @@ $('c-go').onclick = async () => {
     renderCollect(d, url);
   }catch(e){ st.textContent='수집 실패: '+e.message; }
 };
-function renderCollect(d, url){
-  const imgs = d.images.all;
+async function renderCollect(d, url){
   const box = $('c-result');
+  box.innerHTML = '<div class="hint">이미지 정리 중...</div>';
+  // 크기·비율로 상품사진 아닌 것(작은 아이콘/로고·가로배너) 자동 제외
+  const measured = await Promise.all(d.images.all.map(u=>new Promise(r=>{
+    const im=new Image(); im.onload=()=>r({u,w:im.naturalWidth,h:im.naturalHeight,ok:true}); im.onerror=()=>r({u,ok:false}); im.src=API+'/api/image?src='+encodeURIComponent(u);
+  })));
+  const imgs = measured.filter(m=>m.ok && m.w>=400 && m.h>=400 && (m.w/m.h)<=2.2).map(m=>m.u);
+  $('c-status').innerHTML = '✅ 상품사진 <b>'+imgs.length+'장</b> (로고·아이콘·배너 자동 제외)';
   box.innerHTML = '';
+  if(!imgs.length){ box.innerHTML='<div class="hint mt">상품 사진을 찾지 못했어요.</div>'; return; }
   const card = document.createElement('div'); card.className='card';
   card.innerHTML = `<div style="font-weight:700;margin-bottom:4px">${esc(d.name||'상품')}</div>
     <div class="hint" style="margin-bottom:10px">가격은 회원공개라 자동수집하지 않아요 — 저장 후 <b>사입가를 직접 입력</b>하세요.</div>
