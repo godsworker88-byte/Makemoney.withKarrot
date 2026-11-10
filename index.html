@@ -504,16 +504,32 @@ function cover(x,im,X,Y,W,H){ const r=Math.max(W/im.width,H/im.height),w=im.widt
 function contain(x,im,X,Y,W,H){ const r=Math.min(W/im.width,H/im.height),w=im.width*r,h=im.height*r; x.drawImage(im,X+(W-w)/2,Y+(H-h)/2,w,h); }
 const toBlob=c=>new Promise(r=>c.toBlob(r,'image/jpeg',0.92));
 async function cGrid(ims){ const [c,x]=newCanvas(); const n=ims.length||1; const cols=Math.ceil(Math.sqrt(n)),rows=Math.ceil(n/cols),g=10; const cw=(1080-g*(cols+1))/cols,ch=(1080-g*(rows+1))/rows; ims.forEach((im,i)=>{ if(!im)return; const cx=i%cols,cy=Math.floor(i/cols); cover(x,im,g+cx*(cw+g),g+cy*(ch+g),cw,ch); }); return toBlob(c); }
-async function cDetail(ims){ const [c,x]=newCanvas(); const g=10,cw=(1080-g*3)/2; for(let i=0;i<4;i++){ const im=ims[i]||ims[ims.length-1]; if(!im)continue; const cx=i%2,cy=Math.floor(i/2); cover(x,im,g+cx*(cw+g),g+cy*(cw+g),cw,cw); } return toBlob(c); }
-async function cLabeled(im,label){ const [c,x]=newCanvas(); contain(x,im,10,10,1060,950); x.fillStyle='#1b1b1a'; x.fillRect(0,960,1080,120); x.fillStyle='#fff'; x.font='bold 54px -apple-system,"Apple SD Gothic Neo",sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(label||'',540,1022); return toBlob(c); }
+function roundRect(x,X,Y,W,H,r){ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+W,Y,X+W,Y+H,r); x.arcTo(X+W,Y+H,X,Y+H,r); x.arcTo(X,Y+H,X,Y,r); x.arcTo(X,Y,X+W,Y,r); x.closePath(); }
+async function cDetail(ims){ const arr=ims.filter(Boolean); const n=Math.min(arr.length,4)||1; const [c,x]=newCanvas(); const g=10;
+  if(n===1){ cover(x,arr[0],g,g,1080-2*g,1080-2*g); }
+  else if(n===2){ const h=(1080-3*g)/2; cover(x,arr[0],g,g,1080-2*g,h); cover(x,arr[1],g,2*g+h,1080-2*g,h); }
+  else if(n===3){ const htop=(1080-3*g)/2; cover(x,arr[0],g,g,1080-2*g,htop); const w=(1080-3*g)/2,y2=2*g+htop; cover(x,arr[1],g,y2,w,w); cover(x,arr[2],2*g+w,y2,w,w); }
+  else { const cw=(1080-3*g)/2; for(let i=0;i<4;i++){ const cx=i%2,cy=Math.floor(i/2); cover(x,arr[i],g+cx*(cw+g),g+cy*(cw+g),cw,cw); } }
+  return toBlob(c); }
+async function cLabeled(im,label){ const [c,x]=newCanvas(); contain(x,im,10,10,1060,936);
+  x.fillStyle='#ffffff'; x.fillRect(0,956,1080,124); x.fillStyle='#e4e4e2'; x.fillRect(0,956,1080,2);
+  x.fillStyle='#333333'; x.font='bold 56px -apple-system,"Apple SD Gothic Neo",sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(label||'',540,1020); return toBlob(c); }
 async function cContain(im){ const [c,x]=newCanvas(); contain(x,im,20,20,1040,1040); return toBlob(c); }
 function wrap2(x,text,X,Y,maxW,lh){ const lines=[]; let line=''; for(const ch of (text||'')){ if(x.measureText(line+ch).width>maxW){ lines.push(line); line=ch; } else line+=ch; } if(line)lines.push(line); const use=lines.slice(0,2); use.forEach((ln,i)=>x.fillText(ln,X,Y+i*lh)); return use.length; }
-async function cAd(im,title,price){ const [c,x]=newCanvas(); if(im) cover(x,im,0,0,1080,1080); else { x.fillStyle='#eee'; x.fillRect(0,0,1080,1080); }
-  const grd=x.createLinearGradient(0,540,0,1080); grd.addColorStop(0,'rgba(0,0,0,0)'); grd.addColorStop(1,'rgba(0,0,0,0.8)'); x.fillStyle=grd; x.fillRect(0,480,1080,600);
-  x.textAlign='left'; x.textBaseline='alphabetic'; x.fillStyle='#fff'; x.font='bold 58px -apple-system,"Apple SD Gothic Neo",sans-serif';
-  const nLines=wrap2(x,(title||'').replace(/^\(새상품\)\s*/,''),52,900,980,66);
-  if(price){ const pt=Number(price).toLocaleString()+'원'; x.font='bold 76px -apple-system,sans-serif'; const w=x.measureText(pt).width; const py=900+nLines*66+28; x.fillStyle='#e1251b'; x.fillRect(48,py,w+64,96); x.fillStyle='#ffd400'; x.fillText(pt,80,py+70); }
-  x.fillStyle='#ff6f3c'; x.font='bold 34px sans-serif'; x.fillText('NEW 새상품', 52, 840);
+// 광고형(전단지 느낌): 히어로 이미지 + 큰 제목 + 빨강 가격박스 + 컬러 썸네일
+async function cAd(hero,title,price,thumbs){ const [c,x]=newCanvas(1080);
+  if(hero) cover(x,hero,0,0,1080,620); else { x.fillStyle='#eee'; x.fillRect(0,0,1080,620); }
+  x.fillStyle='#fff'; x.fillRect(0,620,1080,460); x.fillStyle='#ff6f3c'; x.fillRect(0,620,1080,8);
+  x.textAlign='left'; x.textBaseline='alphabetic';
+  x.fillStyle='#ff6f3c'; x.font='bold 32px -apple-system,sans-serif'; x.fillText('NEW 새상품', 48, 690);
+  x.fillStyle='#1b1b1a'; x.font='bold 50px -apple-system,"Apple SD Gothic Neo",sans-serif';
+  const nL=wrap2(x,(title||'').replace(/^\(새상품\)\s*/,''),48,748,984,58);
+  let py=748+nL*58+20;
+  if(price){ const pt=Number(price).toLocaleString()+'원'; x.font='bold 84px -apple-system,sans-serif'; const w=x.measureText(pt).width; x.fillStyle='#e1251b'; roundRect(x,44,py,Math.min(w+72,990),112,16); x.fill(); x.fillStyle='#ffe100'; x.fillText(pt,80,py+82); py+=140; }
+  else { x.fillStyle='#999'; x.font='bold 42px sans-serif'; x.fillText('가격 문의', 48, py+44); py+=80; }
+  const th=(thumbs||[]).filter(Boolean).slice(0,4);
+  if(th.length){ const ts=150,gap=16; let tx=48; const ty=1080-ts-38;
+    th.forEach(im=>{ x.save(); roundRect(x,tx,ty,ts,ts,12); x.clip(); cover(x,im,tx,ty,ts,ts); x.restore(); x.strokeStyle='#ececec'; x.lineWidth=2; roundRect(x,tx,ty,ts,ts,12); x.stroke(); tx+=ts+gap; }); }
   return toBlob(c); }
 
 async function genImages(p,out){
@@ -543,13 +559,14 @@ async function genImages(p,out){
     else if(data.groupShot>=0 && pick(data.groupShot)){ results.push({name:'01_전체컬러모음', blob:await cContain(pick(data.groupShot))}); }
     // ② 컬러별
     for(let i=0;i<colors.length;i++){ const im=pick(colors[i].best); if(im) results.push({name:'02_컬러_'+(colors[i].name||('색상'+(i+1))), blob:await cLabeled(im,colors[i].name||('색상'+(i+1)))}); }
-    // ③ 디테일 4분할
-    let det=(data.detail||[]).map(pick).filter(Boolean).slice(0,4);
-    if(det.length<2) det=loaded.filter(Boolean).slice(0,4);
-    results.push({name:'03_디테일4분할', blob:await cDetail(det)});
-    // ④ 광고형
+    // ③ 디테일 (중복 제거)
+    let det=[...new Set(data.detail||[])].map(pick).filter(Boolean).slice(0,4);
+    if(det.length<1) det=loaded.filter(Boolean).slice(0,4);
+    results.push({name:'03_디테일', blob:await cDetail(det)});
+    // ④ 광고형(전단지)
     const adbg=pick((data.model||[])[0]) || pick((colors[0]||{}).best) || loaded.find(Boolean);
-    results.push({name:'04_광고형', blob:await cAd(adbg, (p.gen&&p.gen.title)||p.name, num(p.sell))});
+    const adThumbs=colors.map(cc=>pick(cc.best)).filter(Boolean);
+    results.push({name:'04_광고형', blob:await cAd(adbg, (p.gen&&p.gen.title)||p.name, num(p.sell), adThumbs)});
     // ⑤ 모델형
     const m1=pick((data.model||[])[0]) || adbg; if(m1) results.push({name:'05_모델착용', blob:await cContain(m1)});
     // ⑥ 사이즈표
