@@ -419,38 +419,41 @@ async function urlToPart(u){ const r=await fetch(API+'/api/image?src='+encodeURI
   return await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res({inline_data:{mime_type:(b.type.split(';')[0]||'image/jpeg'),data:String(fr.result).split(',')[1]}}); fr.readAsDataURL(b); }); }
 function copyText(t){ navigator.clipboard?.writeText(t).then(()=>toast('복사됨')).catch(()=>toast('복사 실패')); }
 function shipFeeFor(url){ return /jycompany\.co/.test(url||'') ? 4000 : 3500; }
-const GEN_PROMPT = (name, price, fee) => `너는 한국 의류 쇼핑몰 '다인마켓'의 상품 등록 도우미야. 아래 상품 사진들을 보고 당근마켓 등에 올릴 "상품 제목"과 "상세설명"을 만들어.
+const GEN_PROMPT = (name, price, fee) => `너는 한국 쇼핑몰 '다인마켓'의 상품 등록 도우미야. 아래 상품 사진들을 보고 당근마켓 등에 올릴 "상품 제목"과 "상세설명"을 만들어.
 상품명 힌트: ${name||'(사진 참고)'}
-판매가: ${price?price+'원':'(미입력 — 비워둬)'}
+판매가: ${price?price+'원':'(미입력)'}
+
+[중요 원칙]
+- '문의'라는 표현을 쓰지 마. 사진으로 확인 안 되는 항목은 그 줄을 '아예 생략'해.
+- 확인 안 된 정보·치수·혜택은 지어내지 마.
+- 의류/신발/가방 등 '사이즈가 중요한 품목'인지 판단해. 화장품·잡화 등 사이즈가 무의미하면 SIZE 줄을 통째로 빼.
 
 [제목 규칙]
-- 반드시 '(새상품)'으로 시작
-- 검색 잘 되는 핵심 키워드 조합(종류·핏·소재·시즌 등)
-- 디자인·특징·사이즈 강조, 40자 이내
+- 반드시 '(새상품)'으로 시작, 검색 잘 되는 핵심 키워드 조합, 핵심 특징 강조, 40자 이내
 
-[상세설명 규칙] 아래 틀을 그대로 따르고, 이모지 적절히, 깔끔한 쇼핑몰 문체:
-편안한 착용감과 세련된 디자인을 갖춘 [상품명]입니다.
-[핵심 특징과 장점 2~3줄]
-[활용 상황과 추천 포인트 1줄]
+[상세설명 틀] (해당 없는 줄은 생략, 이모지 적절히, 깔끔한 쇼핑몰 문체)
+세련된 디자인의 [상품명]입니다.
+[핵심 특징·장점 2~3줄]
+[활용/추천 1줄]
 
-✨ 가격: [판매가 또는 '문의']
+${price?'✨ 가격: '+Number(price).toLocaleString()+'원':'(가격 줄 생략)'}
 COLOR
-[사진에서 보이는 색상들]
+[사진에서 보이는 색상만 나열]
+(아래 SIZE 두 줄은 의류 등 사이즈 품목일 때만, 아니면 생략)
 SIZE
-[보이면 사이즈, 없으면 'FREE 또는 문의']
-소재: [사진으로 추정되는 소재, 불확실하면 '문의']
+상세 실측 사이즈는 사이즈(실측) 이미지 참고
+소재: [사진으로 명확한 소재만, 모르면 이 줄 생략]
 
 📦 거래 및 배송 안내
 - 새상품 / 미착용
 - 배송기간 약 3~5일 소요
 - 교환·반품 불가
 - 바로구매 외 택배비 ${Number(fee||3500).toLocaleString()}원
-(위 배송·거래 조건은 반드시 그대로 포함. 그 외 확인 안 된 혜택·치수는 지어내지 마)
 
 다인마켓 🛍️
 좋은 상품을 합리적인 가격에!
 
-[출력] 오직 JSON: {"title":"...","colors":["..."],"sizes":["..."],"material":"...","description":"...(위 틀 전체 텍스트)"}`;
+[출력] 오직 JSON: {"title":"...","isApparel":true/false,"colors":["..."],"material":"...","description":"...(위 틀대로 생략규칙 적용한 완성 텍스트)"}`;
 
 async function genListing(p, out){
   if(!p||!out) return;
@@ -485,7 +488,7 @@ function renderGen(p,out){ const g=p.gen||{};
     <div class="hint" style="font-weight:600;margin:12px 0 4px">상세설명</div>
     <textarea id="gd-${p.id}" rows="12" style="font-size:13px">${esc(g.description||'')}</textarea>
     <div class="row mt"><button class="ghost sm" id="gdc-${p.id}">상세설명 복사</button>
-      <span class="hint">색상 ${(g.colors||[]).join('/')||'-'} · 사이즈 ${(g.sizes||[]).join('/')||'-'} · 소재 ${esc(g.material||'-')}</span></div>`;
+      <span class="hint">색상 ${(g.colors||[]).join('/')||'-'} · 소재 ${esc(g.material||'-')}</span></div>`;
   out.appendChild(wrap);
   $('gtc-'+p.id).onclick=()=>copyText(g.title||'');
   $('gdc-'+p.id).onclick=()=>copyText($('gd-'+p.id).value);
