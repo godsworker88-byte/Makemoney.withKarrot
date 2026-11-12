@@ -142,6 +142,8 @@
     <div class="stats mt">
       <div class="stat"><div class="l">예상 순이익</div><div class="v pos" id="m-profit">0원</div></div>
       <div class="stat"><div class="l">마진율</div><div class="v accent" id="m-rate">0%</div></div>
+      <div class="stat"><div class="l">수수료 (3.3%)</div><div class="v" id="m-fee">0원</div></div>
+      <div class="stat"><div class="l">기준</div><div class="v" style="font-size:13px;font-weight:600;color:var(--muted)">판매가 × 3.3%</div></div>
     </div>
   </section>
 
@@ -235,6 +237,9 @@ const $ = id => document.getElementById(id);
 const won = n => (Math.round(n||0)).toLocaleString('ko-KR') + '원';
 const num = v => { const n = parseFloat(('' + (v??'')).replace(/[^0-9.-]/g,'')); return isNaN(n)?0:n; };
 const uid = () => Math.random().toString(36).slice(2);
+const FEE_RATE = 0.033; // 판매가 대비 수수료 3.3%
+const feeOf = (sell) => Math.round(num(sell)*FEE_RATE);
+function prodProfit(p){ const sell=num(p.sell); const fee=feeOf(sell); return { fee, profit: sell-num(p.buy)-num(p.ship)-fee }; }
 const today = () => { const d=new Date(),o=d.getTimezoneOffset(); return new Date(d-o*6e4).toISOString().slice(0,10); };
 function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
 
@@ -360,7 +365,7 @@ function renderProducts(){
   if(products.length && !list.length){ box.innerHTML='<div class="hint">검색 결과가 없어요.</div>'; return; }
 
   list.forEach(p=>{
-    const profit=num(p.sell)-num(p.buy)-num(p.ship); const rate=num(p.sell)?(profit/num(p.sell)*100):0;
+    const {fee,profit}=prodProfit(p); const rate=num(p.sell)?(profit/num(p.sell)*100):0;
     const open=pExpanded.has(p.id);
     const c=document.createElement('div'); c.className='card';
     c.innerHTML=`
@@ -381,7 +386,7 @@ function renderProducts(){
           <label class="f">판매가<input type="number" inputmode="numeric" data-f="sell" data-id="${p.id}" value="${num(p.sell)||''}" placeholder="0"></label>
         </div>
         <div class="row" style="justify-content:space-between">
-          <span class="hint" data-calc="${p.id}">예상순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · 마진율 <b>${rate.toFixed(1)}%</b></span>
+          <span class="hint" data-calc="${p.id}">예상순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · 마진율 <b>${rate.toFixed(1)}%</b><br>수수료(3.3%) ${won(fee)} 차감</span>
           <select data-f="status" data-id="${p.id}" style="width:auto;padding:7px 10px;font-size:13px">
             ${['준비중','판매중','판매완료','보류'].map(st=>`<option ${st===p.status?'selected':''}>${st}</option>`).join('')}
           </select>
@@ -409,8 +414,8 @@ function renderProducts(){
   box.querySelectorAll('input[data-cat]').forEach(el=>{ el.oninput=()=>{ const p=products.find(x=>x.id===el.dataset.cat); if(p){p.category=el.value;saveProducts();} }; el.onchange=()=>renderProducts(); });
 
   const updateCalc=(p)=>{ const el=box.querySelector(`[data-calc="${p.id}"]`); if(!el)return;
-    const profit=num(p.sell)-num(p.buy)-num(p.ship); const rate=num(p.sell)?profit/num(p.sell)*100:0;
-    el.innerHTML=`예상순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · 마진율 <b>${rate.toFixed(1)}%</b>`; };
+    const {fee,profit}=prodProfit(p); const rate=num(p.sell)?profit/num(p.sell)*100:0;
+    el.innerHTML=`예상순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · 마진율 <b>${rate.toFixed(1)}%</b><br>수수료(3.3%) ${won(fee)} 차감`; };
   box.querySelectorAll('input[data-f]').forEach(el=>{ el.oninput=()=>{ const p=products.find(x=>x.id===el.dataset.id); if(!p)return; p[el.dataset.f]=el.value; saveProducts(); updateCalc(p); }; });
   box.querySelectorAll('select[data-f]').forEach(el=>{ el.onchange=()=>{ const p=products.find(x=>x.id===el.dataset.id); if(!p)return; p[el.dataset.f]=el.value; saveProducts(); }; });
   box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>askDel('이 상품을 삭제할까요?',()=>{ products=products.filter(x=>x.id!==b.dataset.del); saveProducts(); renderProducts(); }));
@@ -653,9 +658,11 @@ function renderImgSet(p,out,results,colorNames){
 //  ③ 마진 계산
 // =========================================================
 function calc(){
-  const profit=num($('m-sell').value)-num($('m-buy').value)-num($('m-ship').value)-num($('m-etc').value);
-  const rate=num($('m-sell').value)? profit/num($('m-sell').value)*100:0;
+  const sell=num($('m-sell').value); const fee=feeOf(sell);
+  const profit=sell-num($('m-buy').value)-num($('m-ship').value)-num($('m-etc').value)-fee;
+  const rate=sell? profit/sell*100:0;
   $('m-profit').textContent=won(profit); $('m-rate').textContent=rate.toFixed(1)+'%';
+  if($('m-fee')) $('m-fee').textContent=won(fee);
 }
 ['m-sell','m-buy','m-ship','m-etc'].forEach(id=>$(id).addEventListener('input',calc));
 
