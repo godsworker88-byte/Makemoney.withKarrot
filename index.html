@@ -361,6 +361,7 @@ function renderProducts(){
         <button class="ghost sm" data-imgs="${p.id}" style="flex:1">사진 ${p.images?.length||0}장 ZIP</button>
         <button class="ghost sm" data-sell="${p.id}" style="flex:1">판매 등록 →</button>
       </div>
+      <textarea data-feat="${p.id}" rows="2" placeholder="상품 특징·강조할 점 직접 입력 (선택) — 적으면 이 내용 위주로 제목·상세설명을 써요" style="font-size:13px;margin-top:10px">${esc(p.features||'')}</textarea>
       <button class="btn sm" data-gen="${p.id}" style="width:100%;margin-top:8px">✨ 제목·상세설명 생성</button>
       <div data-genout="${p.id}"></div>
       <button class="ghost sm" data-genimg="${p.id}" style="width:100%;margin-top:8px">🖼️ 이미지 세트 생성 (색상별·디테일·광고형·모델)</button>
@@ -380,6 +381,7 @@ function renderProducts(){
   box.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>{ const p=products.find(x=>x.id===b.dataset.sell); if(!p)return;
     $('s-name').value=p.name; $('s-price').value=num(p.sell)||''; $('s-cost').value=num(p.buy)||''; $('s-ship').value=num(p.ship)||''; $('s-date').value=today(); salesPreview();
     document.querySelector('.tabbar button[data-tab="sales"]').click(); toast('판매 입력에 채웠어요'); });
+  box.querySelectorAll('[data-feat]').forEach(el=>el.oninput=()=>{ const p=products.find(x=>x.id===el.dataset.feat); if(p){ p.features=el.value; saveProducts(); } });
   box.querySelectorAll('[data-gen]').forEach(b=>b.onclick=()=>genListing(products.find(x=>x.id===b.dataset.gen), box.querySelector(`[data-genout="${b.dataset.gen}"]`)));
   box.querySelectorAll('[data-genimg]').forEach(b=>b.onclick=()=>genImages(products.find(x=>x.id===b.dataset.genimg), box.querySelector(`[data-imgout="${b.dataset.genimg}"]`)));
   products.forEach(p=>{ if(p.gen) renderGen(p, box.querySelector(`[data-genout="${p.id}"]`)); });
@@ -419,11 +421,12 @@ async function urlToPart(u){ const r=await fetch(API+'/api/image?src='+encodeURI
   return await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res({inline_data:{mime_type:(b.type.split(';')[0]||'image/jpeg'),data:String(fr.result).split(',')[1]}}); fr.readAsDataURL(b); }); }
 function copyText(t){ navigator.clipboard?.writeText(t).then(()=>toast('복사됨')).catch(()=>toast('복사 실패')); }
 function shipFeeFor(url){ return /jycompany\.co/.test(url||'') ? 4000 : 3500; }
-const GEN_PROMPT = (name, price, fee) => `너는 한국 쇼핑몰 '다인마켓'의 상품 등록 도우미야. 아래 상품 사진들을 보고 당근마켓 등에 올릴 "상품 제목"과 "상세설명"을 만들어.
+const GEN_PROMPT = (name, price, fee, features) => `너는 한국 쇼핑몰 '다인마켓'의 상품 등록 도우미야. 아래 상품 사진들을 보고 당근마켓 등에 올릴 "상품 제목"과 "상세설명"을 만들어.
 상품명 힌트: ${name||'(사진 참고)'}
 판매가: ${price?price+'원':'(미입력)'}
-
+${features?('\n★ 판매자가 강조할 특징(최우선 반영, 사실로 간주): '+features+'\n'):''}
 [중요 원칙]
+- 판매자가 강조할 특징이 있으면 제목과 상세설명에 그 내용을 '최우선'으로 반영해(사실로 간주하고 반영).
 - '문의'라는 표현을 쓰지 마. 사진으로 확인 안 되는 항목은 그 줄을 '아예 생략'해.
 - 확인 안 된 정보·치수·혜택은 지어내지 마.
 - 의류/신발/가방 등 '사이즈가 중요한 품목'인지 판단해. 화장품·잡화 등 사이즈가 무의미하면 SIZE 줄을 통째로 빼.
@@ -462,12 +465,12 @@ async function genListing(p, out){
   if(!imgs.length){ out.innerHTML='<div class="hint mt">저장된 상품 사진이 없어요.</div>'; return; }
   out.innerHTML='<div class="hint mt">⏳ 사진 분석 중... (10~30초)</div>';
   try{
-    const fee=shipFeeFor(p.url); const parts=[{text:GEN_PROMPT(p.name, num(p.sell), fee)}];
+    const fee=shipFeeFor(p.url); const feats=(p.features||'').trim(); const parts=[{text:GEN_PROMPT(p.name, num(p.sell), fee, feats)}];
     for(const u of imgs){ parts.push(await urlToPart(u)); }
     const c=aiCfg(); const model=c.model||'gemini-flash-latest';
     let data;
     if((c.provider||'gemini')==='openai'){
-      const content=[{type:'text',text:GEN_PROMPT(p.name,num(p.sell),fee)}].concat(imgs.map((u,i)=>({type:'image_url',image_url:{url:'data:'+parts[i+1].inline_data.mime_type+';base64,'+parts[i+1].inline_data.data}})));
+      const content=[{type:'text',text:GEN_PROMPT(p.name,num(p.sell),fee,feats)}].concat(imgs.map((u,i)=>({type:'image_url',image_url:{url:'data:'+parts[i+1].inline_data.mime_type+';base64,'+parts[i+1].inline_data.data}})));
       const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.key},body:JSON.stringify({model:c.model||'gpt-4o-mini',messages:[{role:'user',content}]})});
       if(!r.ok) throw new Error('OpenAI '+r.status); const t=(await r.json()).choices[0].message.content||''; data=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
     } else {
