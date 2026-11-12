@@ -85,6 +85,11 @@
     padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;width:auto;border-radius:0}
   .tabbar button .ic{font-size:19px;line-height:1}
   .tabbar button.on{color:var(--accent)}
+  .chip{background:var(--surface);border:1px solid var(--line2);color:var(--muted);border-radius:999px;padding:6px 13px;font-size:12.5px;font-weight:600;width:auto;white-space:nowrap}
+  .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .pill2{background:var(--accentw);color:var(--accent);border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;margin-right:4px}
+  .chev{font-size:22px;color:var(--faint);transition:transform .15s;flex:none;line-height:1}
+  #p-cats{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;padding-bottom:2px}
 
   details summary{cursor:pointer}
   .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#1b1b1a;color:#fff;
@@ -115,6 +120,9 @@
   <!-- ② 상품 관리 -->
   <section id="tab-products">
     <div class="head">상품 관리</div>
+    <input type="search" id="p-search" placeholder="🔍 상품명·특징·카테고리 검색" style="margin-bottom:10px">
+    <div id="p-cats" class="row" style="gap:6px;margin-bottom:12px"></div>
+    <datalist id="catlist"></datalist>
     <div id="p-list"></div>
     <div class="hint" id="p-empty" style="display:none">아직 저장된 상품이 없어요. <b>상품 수집</b>에서 링크로 가져와 저장해보세요.</div>
   </section>
@@ -330,53 +338,81 @@ async function renderCollect(d, url){
 // =========================================================
 //  ② 상품 관리
 // =========================================================
+let pSearch='', pCat='';
+const pExpanded = new Set();
 function renderProducts(){
   const box=$('p-list'); box.innerHTML='';
+  // 카테고리 칩
+  const cats=[...new Set(products.map(p=>(p.category||'').trim()).filter(Boolean))].sort();
+  $('catlist').innerHTML=cats.map(c=>`<option value="${esc(c)}">`).join('');
+  const chip=(label,val)=>`<button class="chip${pCat===val?' on':''}" data-catchip="${esc(val)}">${esc(label)}</button>`;
+  const catBar=$('p-cats');
+  catBar.innerHTML=[chip('전체','')].concat(cats.map(c=>chip(c,c))).join('');
+  catBar.querySelectorAll('[data-catchip]').forEach(b=>b.onclick=()=>{ pCat=b.dataset.catchip; renderProducts(); });
+  // 필터
+  const q=pSearch.trim().toLowerCase();
+  const list=products.filter(p=>{
+    if(pCat && (p.category||'').trim()!==pCat) return false;
+    if(!q) return true;
+    return [p.name,p.features,p.category,(p.gen&&p.gen.title)].filter(Boolean).join(' ').toLowerCase().includes(q);
+  });
   $('p-empty').style.display = products.length?'none':'block';
-  products.forEach(p=>{
-    const profit = num(p.sell)-num(p.buy)-num(p.ship);
-    const rate = num(p.sell)? (profit/num(p.sell)*100):0;
+  if(products.length && !list.length){ box.innerHTML='<div class="hint">검색 결과가 없어요.</div>'; return; }
+
+  list.forEach(p=>{
+    const profit=num(p.sell)-num(p.buy)-num(p.ship); const rate=num(p.sell)?(profit/num(p.sell)*100):0;
+    const open=pExpanded.has(p.id);
     const c=document.createElement('div'); c.className='card';
     c.innerHTML=`
-      <div class="row" style="gap:10px;align-items:flex-start">
-        <img src="${p.thumb?(API+'/api/image?src='+encodeURIComponent(p.thumb)):''}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;background:var(--bg);flex:none">
+      <div class="phead" data-toggle="${p.id}" style="display:flex;gap:10px;align-items:center;cursor:pointer">
+        <img src="${p.thumb?(API+'/api/image?src='+encodeURIComponent(p.thumb)):''}" style="width:52px;height:52px;border-radius:9px;object-fit:cover;background:var(--bg);flex:none">
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
-          <a href="${esc(p.url)}" target="_blank" class="hint" style="color:var(--blue)">공급처 링크</a>
+          <div class="hint" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.category?('<span class="pill2">'+esc(p.category)+'</span>'):''}순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · ${esc(p.status||'')}</div>
         </div>
+        <span class="chev" style="transform:rotate(${open?90:0}deg)">›</span>
         <button class="del" data-del="${p.id}">✕</button>
       </div>
-      <div class="grid3 mt">
-        <label class="f">사입가<input type="number" inputmode="numeric" data-f="buy" data-id="${p.id}" value="${num(p.buy)||''}" placeholder="0"></label>
-        <label class="f">배송비<input type="number" inputmode="numeric" data-f="ship" data-id="${p.id}" value="${num(p.ship)||''}" placeholder="0"></label>
-        <label class="f">판매가<input type="number" inputmode="numeric" data-f="sell" data-id="${p.id}" value="${num(p.sell)||''}" placeholder="0"></label>
-      </div>
-      <div class="row" style="justify-content:space-between">
-        <span class="hint" data-calc="${p.id}">예상순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · 마진율 <b>${rate.toFixed(1)}%</b></span>
-        <select data-f="status" data-id="${p.id}" style="width:auto;padding:7px 10px;font-size:13px">
-          ${['준비중','판매중','판매완료','보류'].map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join('')}
-        </select>
-      </div>
-      <div class="row mt" style="gap:8px">
-        <button class="ghost sm" data-imgs="${p.id}" style="flex:1">사진 ${p.images?.length||0}장 ZIP</button>
-        <button class="ghost sm" data-sell="${p.id}" style="flex:1">판매 등록 →</button>
-      </div>
-      <textarea data-feat="${p.id}" rows="2" placeholder="상품 특징·강조할 점 직접 입력 (선택) — 적으면 이 내용 위주로 제목·상세설명을 써요" style="font-size:13px;margin-top:10px">${esc(p.features||'')}</textarea>
-      <button class="btn sm" data-gen="${p.id}" style="width:100%;margin-top:8px">✨ 제목·상세설명 생성</button>
-      <div data-genout="${p.id}"></div>
-      <button class="ghost sm" data-genimg="${p.id}" style="width:100%;margin-top:8px">🖼️ 이미지 세트 생성 (색상별·디테일·광고형·모델)</button>
-      <div data-imgout="${p.id}"></div>`;
+      <div class="pbody" data-body="${p.id}" style="display:${open?'block':'none'};margin-top:12px">
+        <label class="f">카테고리<input data-cat="${p.id}" value="${esc(p.category||'')}" placeholder="예: 니트 / 팬츠 / 화장품" list="catlist"></label>
+        <div class="grid3">
+          <label class="f">사입가<input type="number" inputmode="numeric" data-f="buy" data-id="${p.id}" value="${num(p.buy)||''}" placeholder="0"></label>
+          <label class="f">배송비<input type="number" inputmode="numeric" data-f="ship" data-id="${p.id}" value="${num(p.ship)||''}" placeholder="0"></label>
+          <label class="f">판매가<input type="number" inputmode="numeric" data-f="sell" data-id="${p.id}" value="${num(p.sell)||''}" placeholder="0"></label>
+        </div>
+        <div class="row" style="justify-content:space-between">
+          <span class="hint" data-calc="${p.id}">예상순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · 마진율 <b>${rate.toFixed(1)}%</b></span>
+          <select data-f="status" data-id="${p.id}" style="width:auto;padding:7px 10px;font-size:13px">
+            ${['준비중','판매중','판매완료','보류'].map(st=>`<option ${st===p.status?'selected':''}>${st}</option>`).join('')}
+          </select>
+        </div>
+        <a href="${esc(p.url)}" target="_blank" class="hint" style="color:var(--blue);display:inline-block;margin-top:8px">공급처 링크</a>
+        <div class="row mt" style="gap:8px">
+          <button class="ghost sm" data-imgs="${p.id}" style="flex:1">사진 ${p.images?.length||0}장 ZIP</button>
+          <button class="ghost sm" data-sell="${p.id}" style="flex:1">판매 등록 →</button>
+        </div>
+        <textarea data-feat="${p.id}" rows="2" placeholder="상품 특징·강조할 점 직접 입력 (선택) — 적으면 이 내용 위주로 작성" style="font-size:13px;margin-top:10px">${esc(p.features||'')}</textarea>
+        <button class="btn sm" data-gen="${p.id}" style="width:100%;margin-top:8px">✨ 제목·상세설명 생성</button>
+        <div data-genout="${p.id}"></div>
+        <button class="ghost sm" data-genimg="${p.id}" style="width:100%;margin-top:8px">\U0001F5BC️ 이미지 세트 생성</button>
+        <div data-imgout="${p.id}"></div>
+      </div>`;
     box.appendChild(c);
   });
+
+  // 접기 토글
+  box.querySelectorAll('.phead').forEach(h=>h.onclick=(e)=>{ if(e.target.closest('[data-del]'))return;
+    const id=h.dataset.toggle, body=box.querySelector(`[data-body="${id}"]`); const willOpen=body.style.display==='none';
+    body.style.display=willOpen?'block':'none'; if(willOpen)pExpanded.add(id); else pExpanded.delete(id);
+    const ch=h.querySelector('.chev'); if(ch)ch.style.transform='rotate('+(willOpen?90:0)+'deg)'; });
+  // 카테고리 입력
+  box.querySelectorAll('input[data-cat]').forEach(el=>{ el.oninput=()=>{ const p=products.find(x=>x.id===el.dataset.cat); if(p){p.category=el.value;saveProducts();} }; el.onchange=()=>renderProducts(); });
+
   const updateCalc=(p)=>{ const el=box.querySelector(`[data-calc="${p.id}"]`); if(!el)return;
     const profit=num(p.sell)-num(p.buy)-num(p.ship); const rate=num(p.sell)?profit/num(p.sell)*100:0;
     el.innerHTML=`예상순이익 <b class="${profit>=0?'pos':'neg'}">${won(profit)}</b> · 마진율 <b>${rate.toFixed(1)}%</b>`; };
-  box.querySelectorAll('input[data-f]').forEach(el=>{
-    el.oninput=()=>{ const p=products.find(x=>x.id===el.dataset.id); if(!p)return; p[el.dataset.f]=el.value; saveProducts(); updateCalc(p); };
-  });
-  box.querySelectorAll('select[data-f]').forEach(el=>{
-    el.onchange=()=>{ const p=products.find(x=>x.id===el.dataset.id); if(!p)return; p[el.dataset.f]=el.value; saveProducts(); };
-  });
+  box.querySelectorAll('input[data-f]').forEach(el=>{ el.oninput=()=>{ const p=products.find(x=>x.id===el.dataset.id); if(!p)return; p[el.dataset.f]=el.value; saveProducts(); updateCalc(p); }; });
+  box.querySelectorAll('select[data-f]').forEach(el=>{ el.onchange=()=>{ const p=products.find(x=>x.id===el.dataset.id); if(!p)return; p[el.dataset.f]=el.value; saveProducts(); }; });
   box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>askDel('이 상품을 삭제할까요?',()=>{ products=products.filter(x=>x.id!==b.dataset.del); saveProducts(); renderProducts(); }));
   box.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>{ const p=products.find(x=>x.id===b.dataset.sell); if(!p)return;
     $('s-name').value=p.name; $('s-price').value=num(p.sell)||''; $('s-cost').value=num(p.buy)||''; $('s-ship').value=num(p.ship)||''; $('s-date').value=today(); salesPreview();
@@ -384,7 +420,7 @@ function renderProducts(){
   box.querySelectorAll('[data-feat]').forEach(el=>el.oninput=()=>{ const p=products.find(x=>x.id===el.dataset.feat); if(p){ p.features=el.value; saveProducts(); } });
   box.querySelectorAll('[data-gen]').forEach(b=>b.onclick=()=>genListing(products.find(x=>x.id===b.dataset.gen), box.querySelector(`[data-genout="${b.dataset.gen}"]`)));
   box.querySelectorAll('[data-genimg]').forEach(b=>b.onclick=()=>genImages(products.find(x=>x.id===b.dataset.genimg), box.querySelector(`[data-imgout="${b.dataset.genimg}"]`)));
-  products.forEach(p=>{ if(p.gen) renderGen(p, box.querySelector(`[data-genout="${p.id}"]`)); });
+  list.forEach(p=>{ if(p.gen) renderGen(p, box.querySelector(`[data-genout="${p.id}"]`)); });
   box.querySelectorAll('[data-imgs]').forEach(b=>b.onclick=async ()=>{ const p=products.find(x=>x.id===b.dataset.imgs); if(!p||!p.images?.length){toast('저장된 사진이 없어요');return;}
     b.textContent='⏳...'; b.disabled=true;
     try{ const zip=new JSZip();
