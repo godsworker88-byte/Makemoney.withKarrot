@@ -207,7 +207,7 @@
       <div class="stat"><div class="l">총매출</div><div class="v" id="st-sales">0원</div></div>
       <div class="stat"><div class="l">총순이익</div><div class="v pos" id="st-profit">0원</div></div>
       <div class="stat"><div class="l">총원가</div><div class="v" id="st-cost">0원</div></div>
-      <div class="stat"><div class="l">총비용(배송+기타)</div><div class="v" id="st-exp">0원</div></div>
+      <div class="stat"><div class="l">총비용(배송+기타+수수료3.3%)</div><div class="v" id="st-exp">0원</div></div>
       <div class="stat"><div class="l">판매건수</div><div class="v" id="st-count">0건</div></div>
       <div class="stat"><div class="l">평균 마진율</div><div class="v accent" id="st-rate">0%</div></div>
     </div>
@@ -471,6 +471,7 @@ ${features?('\n★ 판매자가 강조할 특징(최우선 반영, 사실로 간
 - '문의'라는 표현을 쓰지 마. 사진으로 확인 안 되는 항목은 그 줄을 '아예 생략'해.
 - 확인 안 된 정보·치수·혜택은 지어내지 마.
 - 의류/신발/가방 등 '사이즈가 중요한 품목'인지 판단해. 화장품·잡화 등 사이즈가 무의미하면 SIZE 줄을 통째로 빼.
+- '미착용'은 의류·신발·가방 등 착용 품목일 때만 써. 화장품·잡화 등 착용하지 않는 상품은 '새상품 / 미착용'이 아니라 '새상품'만 써(미착용 빼).
 
 [제목 규칙]
 - 반드시 '(새상품)'으로 시작, 검색 잘 되는 핵심 키워드 조합, 핵심 특징 강조, 40자 이내
@@ -669,9 +670,9 @@ function calc(){
 // =========================================================
 //  ④ 판매 기록
 // =========================================================
-function salesMargin(r){ return num(r.price)-num(r.cost)-num(r.ship)-num(r.etc); }
+function salesMargin(r){ const f=(r.status!=='환불'&&r.status!=='취소')?feeOf(r.price):0; return num(r.price)-num(r.cost)-num(r.ship)-num(r.etc)-f; }
 function statusBadge(s){ return s==='정산완료'||s==='판매완료'?'b-done':(s==='판매중'||s==='예약중'?'b-sale':(s==='환불'||s==='취소'?'b-refund':'')); }
-function salesPreview(){ $('s-preview').textContent=won(num($('s-price').value)-num($('s-cost').value)-num($('s-ship').value)-num($('s-etc').value)); }
+function salesPreview(){ const sp=num($('s-price').value); $('s-preview').textContent=won(sp-num($('s-cost').value)-num($('s-ship').value)-num($('s-etc').value)-feeOf(sp)); }
 ['s-price','s-cost','s-ship','s-etc'].forEach(id=>$(id).addEventListener('input',salesPreview));
 function renderSales(){
   const tb=$('s-body'); tb.innerHTML='';
@@ -756,7 +757,7 @@ $('ai-save').onclick=()=>{ localStorage.setItem('ai_cfg',JSON.stringify({provide
 function renderStats(){
   const done=sales.filter(r=>r.status!=='환불'&&r.status!=='취소');
   let s=0,cost=0,exp=0,profit=0;
-  done.forEach(r=>{ s+=num(r.price); cost+=num(r.cost); exp+=num(r.ship)+num(r.etc); profit+=salesMargin(r); });
+  done.forEach(r=>{ s+=num(r.price); cost+=num(r.cost); exp+=num(r.ship)+num(r.etc)+feeOf(r.price); profit+=salesMargin(r); });
   $('st-sales').textContent=won(s); $('st-profit').textContent=won(profit); $('st-cost').textContent=won(cost);
   $('st-exp').textContent=won(exp); $('st-count').textContent=done.length+'건'; $('st-rate').textContent=(s?(profit/s*100).toFixed(1):0)+'%';
   const by={}; done.forEach(r=>{ const m=(r.date||'').slice(0,7)||'-'; (by[m]=by[m]||{n:0,s:0,p:0}); by[m].n++; by[m].s+=num(r.price); by[m].p+=salesMargin(r); });
