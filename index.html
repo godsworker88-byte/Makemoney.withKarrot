@@ -162,7 +162,7 @@
           <select id="s-pay"><option>당근페이</option><option>계좌이체</option><option>현금</option><option value="">-</option></select>
         </label>
         <label class="f">상태
-          <select id="s-status"><option>정산완료</option><option>판매완료</option><option>판매중</option><option>예약중</option><option>환불</option><option>취소</option></select>
+          <select id="s-status"><option>정산완료</option><option>고객발송완료</option><option>거래처주문완료</option><option>예약중</option><option>환불</option><option>취소</option></select>
         </label>
       </div>
       <button class="btn" id="s-add">추가 · 순이익 <span id="s-preview">0원</span></button>
@@ -684,7 +684,7 @@ function calc(){
 //  ④ 판매 기록
 // =========================================================
 function salesMargin(r){ const f=(r.status!=='환불'&&r.status!=='취소')?feeOf(r.price):0; return num(r.price)-num(r.cost)-num(r.ship)-num(r.etc)-f; }
-function statusBadge(s){ return s==='정산완료'||s==='판매완료'?'b-done':(s==='판매중'||s==='예약중'?'b-sale':(s==='환불'||s==='취소'?'b-refund':'')); }
+function statusBadge(s){ return (s==='정산완료'||s==='고객발송완료'||s==='판매완료')?'b-done':((s==='거래처주문완료'||s==='판매중'||s==='예약중')?'b-sale':((s==='환불'||s==='취소')?'b-refund':'')); }
 function salesPreview(){ const sp=num($('s-price').value); $('s-preview').textContent=won(sp-num($('s-cost').value)-num($('s-ship').value)-num($('s-etc').value)-feeOf(sp)); }
 ['s-price','s-cost','s-ship','s-etc'].forEach(id=>$(id).addEventListener('input',salesPreview));
 function renderSales(){
