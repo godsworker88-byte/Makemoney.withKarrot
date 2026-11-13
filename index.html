@@ -643,6 +643,15 @@ async function shareAll(results){
   if(navigator.canShare && navigator.canShare({files})){ try{ await navigator.share({files, title:'다인마켓 이미지'}); }catch(e){} }
   else toast('이 브라우저는 공유를 지원하지 않아요');
 }
+// 한 장 저장: 공유 우선(다운로드 차단돼도 갤러리 저장 가능), 안 되면 다운로드
+async function shareOrDownload(r){
+  const file=new File([r.blob], r.name+'.jpg', {type:'image/jpeg'});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file]}); return; }catch(e){ if(e&&e.name==='AbortError') return; }
+  }
+  const u=URL.createObjectURL(r.blob); const a=document.createElement('a'); a.href=u; a.download=r.name+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),10000);
+  toast('저장 시도 — 안 되면 다운로드 허용 필요');
+}
 function renderImgSet(p,out,results,colorNames){
   out.innerHTML=''; const wrap=document.createElement('div'); wrap.className='card'; wrap.style.marginTop='8px'; wrap.style.background='var(--bg)';
   const head=document.createElement('div'); head.className='hint'; head.style.fontWeight='600'; head.style.marginBottom='8px';
@@ -650,7 +659,7 @@ function renderImgSet(p,out,results,colorNames){
   wrap.appendChild(head);
   const grid=document.createElement('div'); grid.className='gal'; wrap.appendChild(grid);
   results.forEach(r=>{ const url=URL.createObjectURL(r.blob); const cell=document.createElement('div'); cell.className='cell sel'; cell.innerHTML='<img src="'+url+'">'; cell.title=r.name;
-    cell.onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=r.name+'.jpg'; a.click(); toast('저장: '+r.name); }; grid.appendChild(cell); });
+    cell.onclick=()=>shareOrDownload(r); grid.appendChild(cell); });
   const note=document.createElement('div'); note.className='hint mt'; note.innerHTML='이미지를 탭하면 1장씩 저장돼요. 전체 저장 시 <b>"여러 파일 다운로드 허용"</b>이 뜨면 꼭 허용하세요(처음 1회).'; wrap.appendChild(note);
   const z=document.createElement('button'); z.className='btn mt'; z.textContent='📥 전체 저장 (갤러리)'; z.onclick=()=>saveAll(results, z);
   wrap.appendChild(z);
