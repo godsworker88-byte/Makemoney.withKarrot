@@ -153,6 +153,7 @@
     <div class="card">
       <div class="grid2">
         <label class="f">판매일<input type="date" id="s-date"></label>
+        <label class="f">거래처 출고예정일<input type="date" id="s-shipdate"></label>
         <label class="f">상품명<input type="text" id="s-name" placeholder="상품명"></label>
         <label class="f">판매가<input type="number" id="s-price" inputmode="numeric" placeholder="0"></label>
         <label class="f">원가(사입가)<input type="number" id="s-cost" inputmode="numeric" placeholder="0"></label>
@@ -195,7 +196,7 @@
     </div>
     <div class="tablewrap">
       <table><thead><tr>
-        <th class="l">날짜</th><th class="l">상품</th><th>판매가</th><th>원가</th><th>배송</th><th>기타</th><th>순이익</th><th class="l">결제</th><th class="l">상태</th><th></th>
+        <th class="l">날짜</th><th class="l">출고예정</th><th class="l">상품</th><th>판매가</th><th>원가</th><th>배송</th><th>기타</th><th>순이익</th><th class="l">결제</th><th class="l">상태</th><th></th>
       </tr></thead><tbody id="s-body"></tbody></table>
     </div>
   </section>
@@ -234,6 +235,7 @@
   <div style="font-weight:700;margin-bottom:12px">판매 기록 수정</div>
   <div class="grid2">
     <label class="f">판매일<input type="date" id="se-date"></label>
+    <label class="f">거래처 출고예정일<input type="date" id="se-shipdate"></label>
     <label class="f">상품명<input type="text" id="se-name"></label>
     <label class="f">판매가<input type="number" inputmode="numeric" id="se-price"></label>
     <label class="f">원가<input type="number" inputmode="numeric" id="se-cost"></label>
@@ -710,7 +712,7 @@ function renderSales(){
   const tb=$('s-body'); tb.innerHTML='';
   sales.forEach(r=>{ const m=salesMargin(r);
     const tr=document.createElement('tr'); tr.style.cursor='pointer';
-    tr.innerHTML=`<td class="l">${r.date||''}</td><td class="l">${esc(r.name||'')}</td>
+    tr.innerHTML=`<td class="l">${r.date||''}</td><td class="l" style="color:var(--muted)">${r.shipDate||''}</td><td class="l">${esc(r.name||'')}</td>
       <td>${num(r.price).toLocaleString()}</td><td>${num(r.cost).toLocaleString()}</td><td>${num(r.ship).toLocaleString()}</td><td>${num(r.etc).toLocaleString()}</td>
       <td class="${m>=0?'pos':'neg'}">${m.toLocaleString()}</td><td class="l">${esc(r.pay||'')}</td>
       <td class="l"><span class="badge ${statusBadge(r.status)}">${r.status||''}</span></td><td><button class="del" data-id="${r.id}">✕</button></td>`;
@@ -725,25 +727,25 @@ let editSaleId=null;
 function sePreview(){ const sp=num($('se-price').value); $('se-preview').textContent=won(sp-num($('se-cost').value)-num($('se-ship').value)-num($('se-etc').value)-feeOf(sp)); }
 ['se-price','se-cost','se-ship','se-etc'].forEach(id=>$(id).addEventListener('input',sePreview));
 function openEditSale(id){ const r=sales.find(x=>x.id===id); if(!r)return; editSaleId=id;
-  $('se-date').value=r.date||today(); $('se-name').value=r.name||''; $('se-price').value=num(r.price)||''; $('se-cost').value=num(r.cost)||''; $('se-ship').value=num(r.ship)||''; $('se-etc').value=num(r.etc)||''; $('se-pay').value=r.pay||''; $('se-status').value=r.status||'정산완료';
+  $('se-date').value=r.date||today(); $('se-shipdate').value=r.shipDate||''; $('se-name').value=r.name||''; $('se-price').value=num(r.price)||''; $('se-cost').value=num(r.cost)||''; $('se-ship').value=num(r.ship)||''; $('se-etc').value=num(r.etc)||''; $('se-pay').value=r.pay||''; $('se-status').value=r.status||'정산완료';
   sePreview(); $('sedit').showModal(); }
 $('se-cancel').onclick=()=>$('sedit').close();
 $('se-save').onclick=()=>{ const r=sales.find(x=>x.id===editSaleId); if(!r){ $('sedit').close(); return; }
-  r.date=$('se-date').value||today(); r.name=$('se-name').value.trim()||r.name; r.price=num($('se-price').value); r.cost=num($('se-cost').value); r.ship=num($('se-ship').value); r.etc=num($('se-etc').value); r.pay=$('se-pay').value; r.status=$('se-status').value;
+  r.date=$('se-date').value||today(); r.shipDate=$('se-shipdate').value; r.name=$('se-name').value.trim()||r.name; r.price=num($('se-price').value); r.cost=num($('se-cost').value); r.ship=num($('se-ship').value); r.etc=num($('se-etc').value); r.pay=$('se-pay').value; r.status=$('se-status').value;
   sales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')); saveSales(); renderSales(); $('sedit').close(); toast('수정됨'); };
 $('se-del').onclick=()=>{ const id=editSaleId; $('sedit').close(); askDel('이 판매기록을 삭제할까요?',()=>{ sales=sales.filter(x=>x.id!==id); saveSales(); renderSales(); }); };
 $('s-add').onclick=()=>{
   const name=$('s-name').value.trim(); if(!name){ toast('상품명을 입력하세요'); return; }
-  sales.unshift({ id:uid(), date:$('s-date').value||today(), name, price:num($('s-price').value), cost:num($('s-cost').value), ship:num($('s-ship').value), etc:num($('s-etc').value), pay:$('s-pay').value, status:$('s-status').value });
+  sales.unshift({ id:uid(), date:$('s-date').value||today(), shipDate:$('s-shipdate').value, name, price:num($('s-price').value), cost:num($('s-cost').value), ship:num($('s-ship').value), etc:num($('s-etc').value), pay:$('s-pay').value, status:$('s-status').value });
   sales.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  ['s-name','s-price','s-cost','s-ship','s-etc'].forEach(id=>$(id).value=''); salesPreview(); renderSales(); toast('추가됨');
+  ['s-name','s-price','s-cost','s-ship','s-etc','s-shipdate'].forEach(id=>$(id).value=''); salesPreview(); renderSales(); toast('추가됨');
 };
 // CSV
-const HEAD=['날짜','상품명','판매가','원가','배송비','기타비용','마진','결제방법','판매상태'];
+const HEAD=['날짜','상품명','판매가','원가','배송비','기타비용','마진','결제방법','판매상태','거래처출고예정일'];
 const csvq=s=>{s=''+(s??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
 $('s-exp').onclick=()=>{
   const lines=[HEAD.join(',')];
-  [...sales].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>lines.push([r.date,csvq(r.name),num(r.price),num(r.cost),num(r.ship),num(r.etc),salesMargin(r),csvq(r.pay||''),r.status].join(',')));
+  [...sales].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>lines.push([r.date,csvq(r.name),num(r.price),num(r.cost),num(r.ship),num(r.etc),salesMargin(r),csvq(r.pay||''),r.status,r.shipDate||''].join(',')));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv'})); a.download='판매내역_'+today()+'.csv'; a.click();
 };
 $('s-imp-btn').onclick=()=>$('s-imp').click();
@@ -754,7 +756,7 @@ function importCSV(text){ text=text.replace(/^﻿/,''); let n=0;
     const name=c[1]; if(!name)return; const date=/\d{4}[-./]\d{1,2}[-./]\d{1,2}/.test(c[0])?c[0].replace(/[./]/g,'-'):c[0];
     // 9열: 날짜,상품,판매가,원가,배송비,기타,마진,결제,상태  (구버전도 관대 처리)
     const nine=c.length>=9;
-    sales.push({ id:uid(), date, name, price:num(c[2]), cost:num(c[3]), ship:nine?num(c[4]):0, etc:num(nine?c[5]:c[4]||0), pay:nine?(c[7]||''):(c[5]||''), status:(nine?c[8]:c[7])||'판매완료' }); n++;
+    sales.push({ id:uid(), date, shipDate:(c.length>=10?(c[9]||''):''), name, price:num(c[2]), cost:num(c[3]), ship:nine?num(c[4]):0, etc:num(nine?c[5]:c[4]||0), pay:nine?(c[7]||''):(c[5]||''), status:(nine?c[8]:c[7])||'판매완료' }); n++;
   });
   sales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')); renderSales(); toast(n+'건 불러옴');
 }
