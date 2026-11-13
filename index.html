@@ -169,6 +169,7 @@
           <select id="s-shipmethod"><option value="">-</option><option>바로구매(거래처➡️고객)</option><option>바로구매(거래처➡️집➡️고객)</option><option>기타</option></select>
         </label>
         <label class="f" id="s-shipmemo-wrap" style="display:none">발송 메모<input type="text" id="s-shipmemo" placeholder="기타 발송방법 메모"></label>
+        <label class="f">당근 아이디<input type="text" id="s-karrot" placeholder="구매자 당근 닉네임/아이디"></label>
       </div>
       <button class="btn" id="s-add">추가 · 순이익 <span id="s-preview">0원</span></button>
       <div class="hint mt">순이익 = 판매가 − 원가 − 배송비 − 기타비용</div>
@@ -200,7 +201,7 @@
     </div>
     <div class="tablewrap">
       <table><thead><tr>
-        <th class="l">날짜</th><th class="l">출고예정</th><th class="l">상품</th><th>판매가</th><th>원가</th><th>배송</th><th>기타</th><th>순이익</th><th class="l">결제</th><th class="l">상태</th><th class="l">발송</th><th></th>
+        <th class="l">날짜</th><th class="l">출고예정</th><th class="l">상품</th><th>판매가</th><th>원가</th><th>배송</th><th>기타</th><th>순이익</th><th class="l">결제</th><th class="l">상태</th><th class="l">발송</th><th class="l">당근ID</th><th></th>
       </tr></thead><tbody id="s-body"></tbody></table>
     </div>
   </section>
@@ -249,6 +250,7 @@
     <label class="f">상태<select id="se-status"><option>정산완료</option><option>고객발송완료</option><option>거래처주문완료</option><option>예약중</option><option>환불</option><option>취소</option></select></label>
     <label class="f">발송방법<select id="se-shipmethod"><option value="">-</option><option>바로구매(거래처➡️고객)</option><option>바로구매(거래처➡️집➡️고객)</option><option>기타</option></select></label>
     <label class="f" id="se-shipmemo-wrap" style="display:none">발송 메모<input type="text" id="se-shipmemo" placeholder="기타 발송방법 메모"></label>
+    <label class="f">당근 아이디<input type="text" id="se-karrot" placeholder="구매자 당근 닉네임/아이디"></label>
   </div>
   <div class="hint mt">순이익 <b id="se-preview">0원</b> (수수료 3.3% 반영)</div>
   <div class="row mt" style="justify-content:space-between">
@@ -721,7 +723,7 @@ function renderSales(){
     tr.innerHTML=`<td class="l">${r.date||''}</td><td class="l" style="color:var(--muted)">${r.shipDate||''}</td><td class="l">${esc(r.name||'')}</td>
       <td>${num(r.price).toLocaleString()}</td><td>${num(r.cost).toLocaleString()}</td><td>${num(r.ship).toLocaleString()}</td><td>${num(r.etc).toLocaleString()}</td>
       <td class="${m>=0?'pos':'neg'}">${m.toLocaleString()}</td><td class="l">${esc(r.pay||'')}</td>
-      <td class="l"><span class="badge ${statusBadge(r.status)}">${r.status||''}</span></td><td class="l" style="color:var(--muted)">${r.shipMethod==='기타'?('기타: '+esc(r.shipMemo||'')):esc(r.shipMethod||'')}</td><td><button class="del" data-id="${r.id}">✕</button></td>`;
+      <td class="l"><span class="badge ${statusBadge(r.status)}">${r.status||''}</span></td><td class="l" style="color:var(--muted)">${r.shipMethod==='기타'?('기타: '+esc(r.shipMemo||'')):esc(r.shipMethod||'')}</td><td class="l">${esc(r.karrotId||'')}</td><td><button class="del" data-id="${r.id}">✕</button></td>`;
     tr.onclick=(e)=>{ if(e.target.closest('.del'))return; openEditSale(r.id); };
     tb.appendChild(tr);
   });
@@ -735,25 +737,25 @@ let editSaleId=null;
 function sePreview(){ const sp=num($('se-price').value); $('se-preview').textContent=won(sp-num($('se-cost').value)-num($('se-ship').value)-num($('se-etc').value)-feeOf(sp)); }
 ['se-price','se-cost','se-ship','se-etc'].forEach(id=>$(id).addEventListener('input',sePreview));
 function openEditSale(id){ const r=sales.find(x=>x.id===id); if(!r)return; editSaleId=id;
-  $('se-date').value=r.date||today(); $('se-shipdate').value=r.shipDate||''; $('se-shipmethod').value=r.shipMethod||''; $('se-shipmemo').value=r.shipMemo||''; $('se-shipmemo-wrap').style.display=(r.shipMethod==='기타')?'flex':'none'; $('se-name').value=r.name||''; $('se-price').value=num(r.price)||''; $('se-cost').value=num(r.cost)||''; $('se-ship').value=num(r.ship)||''; $('se-etc').value=num(r.etc)||''; $('se-pay').value=r.pay||''; $('se-status').value=r.status||'정산완료';
+  $('se-date').value=r.date||today(); $('se-shipdate').value=r.shipDate||''; $('se-shipmethod').value=r.shipMethod||''; $('se-shipmemo').value=r.shipMemo||''; $('se-shipmemo-wrap').style.display=(r.shipMethod==='기타')?'flex':'none'; $('se-karrot').value=r.karrotId||''; $('se-name').value=r.name||''; $('se-price').value=num(r.price)||''; $('se-cost').value=num(r.cost)||''; $('se-ship').value=num(r.ship)||''; $('se-etc').value=num(r.etc)||''; $('se-pay').value=r.pay||''; $('se-status').value=r.status||'정산완료';
   sePreview(); $('sedit').showModal(); }
 $('se-cancel').onclick=()=>$('sedit').close();
 $('se-save').onclick=()=>{ const r=sales.find(x=>x.id===editSaleId); if(!r){ $('sedit').close(); return; }
-  r.date=$('se-date').value||today(); r.shipDate=$('se-shipdate').value; r.shipMethod=$('se-shipmethod').value; r.shipMemo=($('se-shipmethod').value==='기타'?$('se-shipmemo').value:''); r.name=$('se-name').value.trim()||r.name; r.price=num($('se-price').value); r.cost=num($('se-cost').value); r.ship=num($('se-ship').value); r.etc=num($('se-etc').value); r.pay=$('se-pay').value; r.status=$('se-status').value;
+  r.date=$('se-date').value||today(); r.shipDate=$('se-shipdate').value; r.shipMethod=$('se-shipmethod').value; r.shipMemo=($('se-shipmethod').value==='기타'?$('se-shipmemo').value:''); r.karrotId=$('se-karrot').value.trim(); r.name=$('se-name').value.trim()||r.name; r.price=num($('se-price').value); r.cost=num($('se-cost').value); r.ship=num($('se-ship').value); r.etc=num($('se-etc').value); r.pay=$('se-pay').value; r.status=$('se-status').value;
   sales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')); saveSales(); renderSales(); $('sedit').close(); toast('수정됨'); };
 $('se-del').onclick=()=>{ const id=editSaleId; $('sedit').close(); askDel('이 판매기록을 삭제할까요?',()=>{ sales=sales.filter(x=>x.id!==id); saveSales(); renderSales(); }); };
 $('s-add').onclick=()=>{
   const name=$('s-name').value.trim(); if(!name){ toast('상품명을 입력하세요'); return; }
-  sales.unshift({ id:uid(), date:$('s-date').value||today(), shipDate:$('s-shipdate').value, shipMethod:$('s-shipmethod').value, shipMemo:($('s-shipmethod').value==='기타'?$('s-shipmemo').value:''), name, price:num($('s-price').value), cost:num($('s-cost').value), ship:num($('s-ship').value), etc:num($('s-etc').value), pay:$('s-pay').value, status:$('s-status').value });
+  sales.unshift({ id:uid(), date:$('s-date').value||today(), shipDate:$('s-shipdate').value, shipMethod:$('s-shipmethod').value, shipMemo:($('s-shipmethod').value==='기타'?$('s-shipmemo').value:''), karrotId:$('s-karrot').value.trim(), name, price:num($('s-price').value), cost:num($('s-cost').value), ship:num($('s-ship').value), etc:num($('s-etc').value), pay:$('s-pay').value, status:$('s-status').value });
   sales.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  ['s-name','s-price','s-cost','s-ship','s-etc','s-shipdate','s-shipmethod','s-shipmemo'].forEach(id=>$(id).value=''); $('s-shipmemo-wrap').style.display='none'; salesPreview(); renderSales(); toast('추가됨');
+  ['s-name','s-price','s-cost','s-ship','s-etc','s-shipdate','s-shipmethod','s-shipmemo','s-karrot'].forEach(id=>$(id).value=''); $('s-shipmemo-wrap').style.display='none'; salesPreview(); renderSales(); toast('추가됨');
 };
 // CSV
-const HEAD=['날짜','상품명','판매가','원가','배송비','기타비용','마진','결제방법','판매상태','거래처출고예정일','발송방법','발송메모'];
+const HEAD=['날짜','상품명','판매가','원가','배송비','기타비용','마진','결제방법','판매상태','거래처출고예정일','발송방법','발송메모','당근아이디'];
 const csvq=s=>{s=''+(s??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
 $('s-exp').onclick=()=>{
   const lines=[HEAD.join(',')];
-  [...sales].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>lines.push([r.date,csvq(r.name),num(r.price),num(r.cost),num(r.ship),num(r.etc),salesMargin(r),csvq(r.pay||''),r.status,r.shipDate||'',csvq(r.shipMethod||''),csvq(r.shipMemo||'')].join(',')));
+  [...sales].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>lines.push([r.date,csvq(r.name),num(r.price),num(r.cost),num(r.ship),num(r.etc),salesMargin(r),csvq(r.pay||''),r.status,r.shipDate||'',csvq(r.shipMethod||''),csvq(r.shipMemo||''),csvq(r.karrotId||'')].join(',')));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv'})); a.download='판매내역_'+today()+'.csv'; a.click();
 };
 $('s-imp-btn').onclick=()=>$('s-imp').click();
@@ -764,7 +766,7 @@ function importCSV(text){ text=text.replace(/^﻿/,''); let n=0;
     const name=c[1]; if(!name)return; const date=/\d{4}[-./]\d{1,2}[-./]\d{1,2}/.test(c[0])?c[0].replace(/[./]/g,'-'):c[0];
     // 9열: 날짜,상품,판매가,원가,배송비,기타,마진,결제,상태  (구버전도 관대 처리)
     const nine=c.length>=9;
-    sales.push({ id:uid(), date, shipDate:(c.length>=10?(c[9]||''):''), shipMethod:(c.length>=11?(c[10]||''):''), shipMemo:(c.length>=12?(c[11]||''):''), name, price:num(c[2]), cost:num(c[3]), ship:nine?num(c[4]):0, etc:num(nine?c[5]:c[4]||0), pay:nine?(c[7]||''):(c[5]||''), status:(nine?c[8]:c[7])||'판매완료' }); n++;
+    sales.push({ id:uid(), date, shipDate:(c.length>=10?(c[9]||''):''), shipMethod:(c.length>=11?(c[10]||''):''), shipMemo:(c.length>=12?(c[11]||''):''), karrotId:(c.length>=13?(c[12]||''):''), name, price:num(c[2]), cost:num(c[3]), ship:nine?num(c[4]):0, etc:num(nine?c[5]:c[4]||0), pay:nine?(c[7]||''):(c[5]||''), status:(nine?c[8]:c[7])||'판매완료' }); n++;
   });
   sales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')); renderSales(); toast(n+'건 불러옴');
 }
