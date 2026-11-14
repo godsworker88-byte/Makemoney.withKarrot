@@ -113,6 +113,16 @@
       </label>
       <button class="btn" id="c-go">상품 가져오기</button>
       <div id="c-status" class="hint mt"></div>
+      <details style="margin-top:12px"><summary class="hint">🔑 시크릿루트 로그인 (사입가 자동수집)</summary>
+        <div class="mt">
+          <div class="hint" style="margin-bottom:8px">로그인하면 시크릿루트 상품의 <b>사입가(회원가)</b>가 수집 시 자동으로 채워져요. 다른 데 안 쓰는 <b>전용 비밀번호</b> 사용을 권장해요.</div>
+          <label class="f">아이디(이메일)<input type="text" id="sr-uid" placeholder="시크릿루트 아이디" autocomplete="off"></label>
+          <label class="f">비밀번호<input type="password" id="sr-pw" placeholder="이 브라우저에만 저장" autocomplete="off"></label>
+          <button class="ghost sm" id="sr-save">저장</button>
+          <button class="ghost sm" id="sr-clear">삭제</button>
+          <span id="sr-saved" class="hint"></span>
+        </div>
+      </details>
     </div>
     <div id="c-result"></div>
   </section>
@@ -304,6 +314,18 @@ $('c-go').onclick = async () => {
     if(d.error){ st.textContent='오류: '+d.error; return; }
     lastCollect = d;
     st.innerHTML = '✅ <b>'+ (d.counts.total) +'장</b> 수집 ('+d.counts.detail+' 상세 / '+d.counts.thumbnail+' 썸네일)';
+    // 시크릿루트 + 로그인 저장돼 있으면 사입가 자동수집
+    const sa = srAuth();
+    if(/secretroot\.imweb\.me/.test(url) && sa.uid && sa.passwd){
+      st.innerHTML += ' · <span id="c-pr">💰 사입가 확인 중...</span>';
+      try{
+        const pr = await fetch(API+'/api/sr-price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,uid:sa.uid,passwd:sa.passwd})});
+        const pd = await pr.json();
+        if(pd.ok){ d.salePrice=pd.salePrice; d.origPrice=pd.origPrice;
+          const el=$('c-pr'); if(el) el.innerHTML='💰 사입가 <b>'+won(pd.salePrice)+'</b>';
+        } else { const el=$('c-pr'); if(el) el.textContent='💰 '+(pd.reason||'사입가 자동수집 실패'); }
+      }catch(e){ const el=$('c-pr'); if(el) el.textContent='💰 사입가 수집 오류'; }
+    }
     renderCollect(d, url);
   }catch(e){ st.textContent='수집 실패: '+e.message; }
 };
@@ -320,7 +342,9 @@ async function renderCollect(d, url){
   if(!imgs.length){ box.innerHTML='<div class="hint mt">상품 사진을 찾지 못했어요.</div>'; return; }
   const card = document.createElement('div'); card.className='card';
   card.innerHTML = `<div style="font-weight:700;margin-bottom:4px">${esc(d.name||'상품')}</div>
-    <div class="hint" style="margin-bottom:10px">가격은 회원공개라 자동수집하지 않아요 — 저장 후 <b>사입가를 직접 입력</b>하세요.</div>
+    <div class="hint" style="margin-bottom:10px">${d.salePrice
+      ? '사입가 <b>'+won(d.salePrice)+'</b> 자동수집됨'+(d.origPrice&&d.origPrice!==d.salePrice?' (정가 '+won(d.origPrice)+')':'')+' — 저장 시 자동 입력돼요.'
+      : '가격은 회원공개라 자동수집하지 않아요 — 저장 후 <b>사입가를 직접 입력</b>하세요. (🔑 시크릿루트 로그인 저장 시 자동수집)'}</div>
     <div class="row"><button class="ghost sm" id="c-all">전체선택</button><button class="ghost sm" id="c-none">전체해제</button>
     <span class="hint" id="c-selcount"></span></div>`;
   const gal = document.createElement('div'); gal.className='gal';
@@ -343,7 +367,7 @@ async function renderCollect(d, url){
   $('c-none').onclick=()=>{ sel.clear(); gal.querySelectorAll('.cell').forEach(c=>c.classList.remove('sel')); updateSel(); };
   const chosen=()=>[...sel].sort((a,b)=>a-b).map(i=>imgs[i]);
   $('c-save').onclick=()=>{
-    const p={ id:uid(), name:d.name||'상품', url, buy:0, ship:0, sell:0, status:'준비중',
+    const p={ id:uid(), name:d.name||'상품', url, buy:num(d.salePrice)||0, ship:0, sell:0, status:'준비중',
       thumb: chosen()[0]||d.ogImage||imgs[0]||'', images: chosen() };
     products.unshift(p); saveProducts();
     toast('상품 관리에 저장됐어요');
@@ -765,6 +789,14 @@ function importCSV(text){ text=text.replace(/^﻿/,''); let n=0;
   sales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')); renderSales(); toast(n+'건 불러옴');
 }
 $('s-clear').onclick=()=>askDel('모든 판매기록을 삭제할까요? 되돌릴 수 없어요.',()=>{ sales=[]; saveSales(); renderSales(); });
+
+// ---------- 시크릿루트 로그인(사입가 자동수집) ----------
+function srAuth(){ try{return JSON.parse(localStorage.getItem('sr_auth'))||{};}catch(e){return{};} }
+(function(){ const a=srAuth(); if($('sr-uid'))$('sr-uid').value=a.uid||''; if($('sr-pw'))$('sr-pw').value=a.passwd||''; })();
+if($('sr-save'))$('sr-save').onclick=()=>{ const uid=$('sr-uid').value.trim(), passwd=$('sr-pw').value;
+  if(!uid||!passwd){ $('sr-saved').textContent='아이디·비밀번호를 모두 입력하세요'; return; }
+  localStorage.setItem('sr_auth',JSON.stringify({uid,passwd})); const s=$('sr-saved'); s.textContent='✓ 저장됨'; setTimeout(()=>s.textContent='',1500); };
+if($('sr-clear'))$('sr-clear').onclick=()=>{ localStorage.removeItem('sr_auth'); $('sr-uid').value=''; $('sr-pw').value=''; const s=$('sr-saved'); s.textContent='삭제됨'; setTimeout(()=>s.textContent='',1500); };
 
 // ---------- 당근 캡처(AI) ----------
 function aiCfg(){ try{return JSON.parse(localStorage.getItem('ai_cfg'))||{};}catch(e){return{};} }
