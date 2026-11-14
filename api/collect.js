@@ -1,8 +1,9 @@
 // 다인마켓 상품 수집 API (Vercel 서버리스 · 브라우저/Playwright 불필요)
 // 지원: secretroot.imweb.me (/shop/), jycompany.co (/products/)
 const SITES = {
-  'secretroot.imweb.me': { path: '/shop/', kind: 'imweb' },
-  'jycompany.co':        { path: '/products/', kind: 'jycompany' }
+  // 시크릿루트: 상품은 경로 상관없이 ?idx=숫자 로 구분됨 (/shop/?idx=, /?idx= 모두 허용)
+  'secretroot.imweb.me': { kind: 'imweb',     valid: (u) => u.searchParams.has('idx') },
+  'jycompany.co':        { kind: 'jycompany', valid: (u) => u.pathname.startsWith('/products/') }
 };
 
 module.exports = async (req, res) => {
@@ -14,8 +15,8 @@ module.exports = async (req, res) => {
     let u;
     try { u = new URL(raw); } catch { return res.status(400).json({ error: 'URL 형식이 올바르지 않아요.' }); }
     const site = SITES[u.hostname];
-    if (u.protocol !== 'https:' || !site || !u.pathname.startsWith(site.path))
-      return res.status(400).json({ error: '지원하는 공급처 상품 URL이 아니에요 (시크릿루트 /shop/, JYCompany /products/).' });
+    if (u.protocol !== 'https:' || !site || !site.valid(u))
+      return res.status(400).json({ error: '지원하는 공급처 상품 URL이 아니에요 (시크릿루트 상품(?idx=), JYCompany /products/).' });
 
     const r = await fetch(u.href, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) DainmarketCollector', 'Accept-Language': 'ko' }

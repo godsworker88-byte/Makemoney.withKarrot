@@ -295,7 +295,7 @@ const saveProducts = () => localStorage.setItem('dm_products', JSON.stringify(pr
 let lastCollect = null;
 $('c-go').onclick = async () => {
   const url = $('c-url').value.trim();
-  if(!/^https:\/\/(secretroot\.imweb\.me\/shop\/|jycompany\.co\/products\/)/.test(url)){ toast('시크릿루트(/shop/) 또는 JYCompany(/products/) 상품 링크를 넣어주세요'); return; }
+  if(!/^https:\/\/(secretroot\.imweb\.me\/[^]*[?&]idx=\d|jycompany\.co\/products\/)/.test(url)){ toast('시크릿루트 상품(?idx=…) 또는 JYCompany(/products/) 상품 링크를 넣어주세요'); return; }
   const st=$('c-status'); st.textContent='⏳ 상품 정보를 가져오는 중...';
   $('c-result').innerHTML='';
   try{
