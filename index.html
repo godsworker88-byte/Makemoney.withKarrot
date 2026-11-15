@@ -704,17 +704,12 @@ async function genImages(p,out){
   }catch(e){ out.innerHTML='<div class="hint mt">생성이 중단됐어요(네트워크 끊김). <b>다른 앱으로 넘어가지 말고</b> 잠깐 기다려 주세요.<br><button class="ghost sm mt" data-regenimg="'+p.id+'">다시 생성</button> <span class="hint">· '+esc((e.message||'').slice(0,60))+'</span></div>';
     const rb=out.querySelector('[data-regenimg]'); if(rb) rb.onclick=()=>genImages(p,out); }
 }
-// 전체 저장: 공유 시트로 한 번에 갤러리 저장(안드로이드에서 가장 확실). 안 되면 순차 다운로드로 폴백.
+// 전체 저장: 순차 다운로드 → '다운로드 폴더'(갤러리 '다운로드' 앨범)에 저장. 처음 1회 '여러 파일 다운로드 허용' 필요.
 async function saveAll(results, btn){
-  const files = results.map(r=> new File([r.blob], r.name+'.jpg', {type:'image/jpeg'}));
-  if(navigator.canShare && navigator.canShare({files})){
-    try{ await navigator.share({files, title:'다인마켓 이미지'}); return; }
-    catch(e){ if(e&&e.name==='AbortError') return; /* 공유 실패 시 다운로드로 폴백 */ }
-  }
   const old=btn?btn.textContent:''; if(btn){btn.textContent='저장 중...';btn.disabled=true;}
-  for(const r of results){ const u=URL.createObjectURL(r.blob); const a=document.createElement('a'); a.href=u; a.download=r.name+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); await new Promise(s=>setTimeout(s,700)); setTimeout(()=>URL.revokeObjectURL(u),15000); }
+  for(const r of results){ const u=URL.createObjectURL(r.blob); const a=document.createElement('a'); a.href=u; a.download=r.name+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); await new Promise(s=>setTimeout(s,800)); setTimeout(()=>URL.revokeObjectURL(u),15000); }
   if(btn){btn.textContent=old;btn.disabled=false;}
-  toast('"여러 파일 다운로드 허용"이 뜨면 꼭 "허용" (처음 1회) → 전부 저장돼요');
+  toast('다운로드 폴더에 저장됐어요 → 갤러리 "다운로드" 앨범에서 확인하세요');
 }
 // 공유(카톡·퀵셰어 등으로 보내기)
 async function shareAll(results){
@@ -739,8 +734,8 @@ function renderImgSet(p,out,results,colorNames){
   const grid=document.createElement('div'); grid.className='gal'; wrap.appendChild(grid);
   results.forEach(r=>{ const url=URL.createObjectURL(r.blob); const cell=document.createElement('div'); cell.className='cell sel'; cell.innerHTML='<img src="'+url+'">'; cell.title=r.name;
     cell.onclick=()=>shareOrDownload(r); grid.appendChild(cell); });
-  const note=document.createElement('div'); note.className='hint mt'; note.innerHTML='이미지를 탭하면 1장씩 저장돼요. <b>전체 저장</b>을 누르면 공유창이 떠요 → <b>"이미지 저장" 또는 "갤러리"</b>를 고르면 한 번에 저장돼요.'; wrap.appendChild(note);
-  const z=document.createElement('button'); z.className='btn mt'; z.textContent='📥 전체 저장 (갤러리)'; z.onclick=()=>saveAll(results, z);
+  const note=document.createElement('div'); note.className='hint mt'; note.innerHTML='<b>전체 저장</b>: 처음 한 번 <b>"여러 파일 다운로드 허용"</b>이 뜨면 "허용" → <b>갤러리 › 다운로드 앨범</b>에 전부 저장돼요(저장창은 안 떠요).<br>한 장만: 그 이미지를 <b>탭</b> → "이미지 저장".'; wrap.appendChild(note);
+  const z=document.createElement('button'); z.className='btn mt'; z.textContent='📥 전체 저장 (다운로드 앨범)'; z.onclick=()=>saveAll(results, z);
   wrap.appendChild(z);
   const sh=document.createElement('button'); sh.className='ghost sm mt'; sh.style.width='100%'; sh.textContent='공유 (카톡·퀵셰어로 보내기)'; sh.onclick=()=>shareAll(results);
   wrap.appendChild(sh);
