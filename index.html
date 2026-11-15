@@ -619,7 +619,8 @@ detail: 원단·포켓·지퍼·밴딩·봉제 등 클로즈업 디테일 사진
 model: 사람이 착용한 사진 번호들.
 groupShot: 여러 색이 한 장에 같이 나온 사진 번호(없으면 -1).
 sizeChart: 사이즈표·치수(cm, 총장·허리 등 숫자) 이미지 번호(없으면 -1).
-오직 JSON만: {"colors":[{"name":"","indexes":[],"best":0}],"detail":[],"model":[],"groupShot":-1,"sizeChart":-1}`;
+sizeBox: sizeChart 이미지 안에서 '치수(cm)·실측 도식이 있는 부분'만의 영역을 [x,y,w,h](0~1 비율)로. 소재/디테일 사진이나 여백은 빼고 치수 부분만 타이트하게. 이미지 전체가 실측이면 [0,0,1,1]. sizeChart가 -1이면 null.
+오직 JSON만: {"colors":[{"name":"","indexes":[],"best":0}],"detail":[],"model":[],"groupShot":-1,"sizeChart":-1,"sizeBox":null}`;
 
 async function loadImg(url, tries=3){ let last;
   for(let i=0;i<tries;i++){ await whenVisible();
@@ -643,6 +644,13 @@ async function cLabeled(im,label){ const [c,x]=newCanvas(); contain(x,im,10,10,1
   x.fillStyle='#ffffff'; x.fillRect(0,956,1080,124); x.fillStyle='#e4e4e2'; x.fillRect(0,956,1080,2);
   x.fillStyle='#333333'; x.font='bold 56px -apple-system,"Apple SD Gothic Neo",sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(label||'',540,1020); return toBlob(c); }
 async function cContain(im){ const [c,x]=newCanvas(); contain(x,im,20,20,1040,1040); return toBlob(c); }
+// 이미지의 특정 영역(비율 box)만 잘라 1080 정사각형에 담기
+async function cCropBox(im, box){ const [c,x]=newCanvas();
+  let sx=Math.max(0,box.x*im.width), sy=Math.max(0,box.y*im.height);
+  let sw=Math.min(im.width-sx, box.w*im.width), sh=Math.min(im.height-sy, box.h*im.height);
+  if(sw<=0||sh<=0){ contain(x,im,20,20,1040,1040); return toBlob(c); }
+  const r=Math.min(1040/sw,1040/sh), dw=sw*r, dh=sh*r;
+  x.drawImage(im, sx,sy,sw,sh, (1080-dw)/2,(1080-dh)/2, dw,dh); return toBlob(c); }
 function wrap2(x,text,X,Y,maxW,lh){ const lines=[]; let line=''; for(const ch of (text||'')){ if(x.measureText(line+ch).width>maxW){ lines.push(line); line=ch; } else line+=ch; } if(line)lines.push(line); const use=lines.slice(0,2); use.forEach((ln,i)=>x.fillText(ln,X,Y+i*lh)); return use.length; }
 // 광고형(전단지 느낌): 히어로 이미지 + 큰 제목 + 빨강 가격박스 + 컬러 썸네일
 async function cAd(hero,title,price,thumbs){ const [c,x]=newCanvas(1080);
@@ -691,14 +699,15 @@ async function genImages(p,out){
     let det=[...new Set(data.detail||[])].map(pick).filter(Boolean).slice(0,4);
     if(det.length<1) det=loaded.filter(Boolean).slice(0,4);
     results.push({name:'03_디테일', blob:await cDetail(det)});
-    // ④ 광고형(전단지)
+    // ④ 모델형
     const adbg=pick((data.model||[])[0]) || pick((colors[0]||{}).best) || loaded.find(Boolean);
-    const adThumbs=colors.map(cc=>pick(cc.best)).filter(Boolean);
-    results.push({name:'04_광고형', blob:await cAd(adbg, (p.gen&&p.gen.title)||p.name, num(p.sell), adThumbs)});
-    // ⑤ 모델형
-    const m1=pick((data.model||[])[0]) || adbg; if(m1) results.push({name:'05_모델착용', blob:await cContain(m1)});
-    // ⑥ 사이즈표
-    if(data.sizeChart>=0 && pick(data.sizeChart)) results.push({name:'06_사이즈', blob:await cContain(pick(data.sizeChart))});
+    const m1=pick((data.model||[])[0]) || adbg; if(m1) results.push({name:'04_모델착용', blob:await cContain(m1)});
+    // ⑤ 사이즈표 — 치수(실측) 부분만 잘라서
+    if(data.sizeChart>=0 && pick(data.sizeChart)){
+      const sim=pick(data.sizeChart); const sb=data.sizeBox;
+      const ok = Array.isArray(sb)&&sb.length===4 && sb.every(v=>v>=0&&v<=1) && sb[2]>0.05 && sb[3]>0.05;
+      results.push({name:'05_사이즈', blob: ok ? await cCropBox(sim,{x:+sb[0],y:+sb[1],w:+sb[2],h:+sb[3]}) : await cContain(sim)});
+    }
 
     renderImgSet(p,out,results, colors.map(c=>c.name).filter(Boolean));
   }catch(e){ out.innerHTML='<div class="hint mt">생성이 중단됐어요(네트워크 끊김). <b>다른 앱으로 넘어가지 말고</b> 잠깐 기다려 주세요.<br><button class="ghost sm mt" data-regenimg="'+p.id+'">다시 생성</button> <span class="hint">· '+esc((e.message||'').slice(0,60))+'</span></div>';
