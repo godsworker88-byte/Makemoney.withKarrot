@@ -734,7 +734,7 @@ function renderImgSet(p,out,results,colorNames){
   const grid=document.createElement('div'); grid.className='gal'; wrap.appendChild(grid);
   results.forEach(r=>{ const url=URL.createObjectURL(r.blob); const cell=document.createElement('div'); cell.className='cell sel'; cell.innerHTML='<img src="'+url+'">'; cell.title=r.name;
     cell.onclick=()=>shareOrDownload(r); grid.appendChild(cell); });
-  const note=document.createElement('div'); note.className='hint mt'; note.innerHTML='<b>전체 저장</b>: 처음 한 번 <b>"여러 파일 다운로드 허용"</b>이 뜨면 "허용" → <b>갤러리 › 다운로드 앨범</b>에 전부 저장돼요(저장창은 안 떠요).<br>한 장만: 그 이미지를 <b>탭</b> → "이미지 저장".'; wrap.appendChild(note);
+  const note=document.createElement('div'); note.className='hint mt'; note.innerHTML='✅ <b>제일 확실한 방법</b>: 이미지를 <b>하나씩 탭</b> → 저장창에서 <b>"이미지 저장"</b>. (설정 없이 바로 갤러리에 저장돼요)<br>📥 <b>전체 저장</b>은 크롬이 여러 장 다운로드를 막으면 첫 장만 될 수 있어요 — 그땐 위 방법을 쓰거나, 아래 안내대로 자동 다운로드를 켜주세요.'; wrap.appendChild(note);
   const z=document.createElement('button'); z.className='btn mt'; z.textContent='📥 전체 저장 (다운로드 앨범)'; z.onclick=()=>saveAll(results, z);
   wrap.appendChild(z);
   const sh=document.createElement('button'); sh.className='ghost sm mt'; sh.style.width='100%'; sh.textContent='공유 (카톡·퀵셰어로 보내기)'; sh.onclick=()=>shareAll(results);
