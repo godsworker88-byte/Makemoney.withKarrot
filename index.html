@@ -112,6 +112,7 @@
         <input type="url" id="c-url" placeholder="https://secretroot.imweb.me/shop/?idx=1605" inputmode="url">
       </label>
       <button class="btn" id="c-go">상품 가져오기</button>
+      <div class="hint mt">💡 공급처에서 <b>공유 → 다인마켓</b>을 누르면 붙여넣기 없이 바로 수집돼요.</div>
       <div id="c-status" class="hint mt"></div>
       <details style="margin-top:12px"><summary class="hint">🔑 시크릿루트 로그인 (사입가 자동수집)</summary>
         <div class="mt">
@@ -903,6 +904,19 @@ function esc(s){ return (''+s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 $('s-date').value=today(); salesPreview(); calc(); renderSales();
 $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+
+// 공유(share_target)로 들어온 링크 자동 수집: 시크릿루트/JYCompany URL이면 바로 가져오기
+(function(){
+  const sp=new URLSearchParams(location.search);
+  const cand=[sp.get('url'),sp.get('text'),sp.get('title')].filter(Boolean).join(' ');
+  const m=cand.match(/https:\/\/(?:secretroot\.imweb\.me\/\S*idx=\d+|jycompany\.co\/products\/\S+)/);
+  if(!m) return;
+  document.querySelector('.tabbar button[data-tab="collect"]').click();
+  $('c-url').value=m[0];
+  // 주소창 쿼리 정리(새로고침 시 중복 수집 방지)
+  history.replaceState(null,'',location.pathname);
+  setTimeout(()=>{ $('c-go').click(); }, 200);
+})();
 </script>
 </body>
 </html>
