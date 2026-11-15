@@ -491,9 +491,22 @@ function renderProducts(){
 
 // ---------- Gemini 모델 자동탐색 + 호출 헬퍼 ----------
 function verScore(n){ const m=(n||'').match(/gemini-(\d+)\.(\d+)/); return m?parseInt(m[1])*10+parseInt(m[2]):0; }
+// 백그라운드(다른 앱) 중엔 네트워크가 멈추므로, 화면이 다시 보일 때까지 기다렸다 재시도하는 fetch
+const sleep=ms=>new Promise(s=>setTimeout(s,ms));
+function whenVisible(){ return document.visibilityState==='visible' ? Promise.resolve()
+  : new Promise(res=>{ const h=()=>{ if(document.visibilityState==='visible'){ document.removeEventListener('visibilitychange',h); res(); } }; document.addEventListener('visibilitychange',h); }); }
+async function fetchR(url, opts, tries=4){
+  let last;
+  for(let i=0;i<tries;i++){
+    await whenVisible();
+    try{ const r=await fetch(url, opts); if(r.status>=500 && i<tries-1){ await sleep(700*(i+1)); continue; } return r; }
+    catch(e){ last=e; await sleep(700*(i+1)); }
+  }
+  throw last||new Error('네트워크 연결이 끊겼어요');
+}
 async function resolveGemini(key){
   const cached=localStorage.getItem('gemini_model'); if(cached) return cached;
-  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models?key='+encodeURIComponent(key));
+  const r=await fetchR('https://generativelanguage.googleapis.com/v1beta/models?key='+encodeURIComponent(key));
   if(!r.ok) throw new Error('모델 목록 조회 실패 '+r.status);
   const j=await r.json();
   const ms=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent') && /flash/i.test(m.name) && !/(tts|image-generation|embedding|aqa)/i.test(m.name));
@@ -504,7 +517,7 @@ async function resolveGemini(key){
 // Gemini generateContent 호출 (모델 자동탐색, 404 시 1회 재탐색). JSON 응답 텍스트 반환.
 async function geminiGen(cfg, parts){
   let model = cfg.model || await resolveGemini(cfg.key);
-  const call = (m)=>fetch('https://generativelanguage.googleapis.com/v1beta/models/'+m+':generateContent?key='+encodeURIComponent(cfg.key),
+  const call = (m)=>fetchR('https://generativelanguage.googleapis.com/v1beta/models/'+m+':generateContent?key='+encodeURIComponent(cfg.key),
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{response_mime_type:'application/json'}})});
   let r=await call(model);
   if(r.status===404 && !cfg.model){ localStorage.removeItem('gemini_model'); model=await resolveGemini(cfg.key); r=await call(model); }
@@ -513,7 +526,7 @@ async function geminiGen(cfg, parts){
 }
 
 // ---------- 제목·상세설명 AI 생성 ----------
-async function urlToPart(u){ const r=await fetch(API+'/api/image?src='+encodeURIComponent(u)); const b=await r.blob();
+async function urlToPart(u){ const r=await fetchR(API+'/api/image?src='+encodeURIComponent(u)); const b=await r.blob();
   return await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res({inline_data:{mime_type:(b.type.split(';')[0]||'image/jpeg'),data:String(fr.result).split(',')[1]}}); fr.readAsDataURL(b); }); }
 function copyText(t){ navigator.clipboard?.writeText(t).then(()=>toast('복사됨')).catch(()=>toast('복사 실패')); }
 function shipFeeFor(url){ return /jycompany\.co/.test(url||'') ? 4000 : 3500; }
@@ -571,7 +584,7 @@ async function genListing(p, out){
     let data;
     if((c.provider||'gemini')==='openai'){
       const content=[{type:'text',text:GEN_PROMPT(p.name,num(p.sell),fee,feats)}].concat(imgs.map((u,i)=>({type:'image_url',image_url:{url:'data:'+parts[i+1].inline_data.mime_type+';base64,'+parts[i+1].inline_data.data}})));
-      const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.key},body:JSON.stringify({model:c.model||'gpt-4o-mini',messages:[{role:'user',content}]})});
+      const r=await fetchR('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.key},body:JSON.stringify({model:c.model||'gpt-4o-mini',messages:[{role:'user',content}]})});
       if(!r.ok) throw new Error('OpenAI '+r.status); const t=(await r.json()).choices[0].message.content||''; data=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
     } else {
       const t=await geminiGen(c, parts); data=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
@@ -579,7 +592,8 @@ async function genListing(p, out){
     // 저장
     p.gen={title:data.title||'',description:data.description||'',colors:data.colors||[],sizes:data.sizes||[],material:data.material||''}; saveProducts();
     renderGen(p,out);
-  }catch(e){ out.innerHTML='<div class="hint mt">생성 실패: '+esc(e.message||String(e))+'</div>'; }
+  }catch(e){ out.innerHTML='<div class="hint mt">생성이 중단됐어요(네트워크 끊김). <b>다른 앱으로 넘어가지 말고</b> 잠깐 기다려 주세요.<br><button class="ghost sm mt" data-regen="'+p.id+'">다시 생성</button> <span class="hint">· '+esc((e.message||'').slice(0,60))+'</span></div>';
+    const rb=out.querySelector('[data-regen]'); if(rb) rb.onclick=()=>genListing(p,out); }
 }
 function renderGen(p,out){ const g=p.gen||{};
   out.innerHTML='';
@@ -607,7 +621,12 @@ groupShot: 여러 색이 한 장에 같이 나온 사진 번호(없으면 -1).
 sizeChart: 사이즈표·치수(cm, 총장·허리 등 숫자) 이미지 번호(없으면 -1).
 오직 JSON만: {"colors":[{"name":"","indexes":[],"best":0}],"detail":[],"model":[],"groupShot":-1,"sizeChart":-1}`;
 
-function loadImg(url){ return new Promise((res,rej)=>{ const im=new Image(); im.crossOrigin='anonymous'; im.onload=()=>res(im); im.onerror=()=>rej(new Error('img')); im.src=API+'/api/image?src='+encodeURIComponent(url); }); }
+async function loadImg(url, tries=3){ let last;
+  for(let i=0;i<tries;i++){ await whenVisible();
+    try{ return await new Promise((res,rej)=>{ const im=new Image(); im.crossOrigin='anonymous'; im.onload=()=>res(im); im.onerror=()=>rej(new Error('img')); im.src=API+'/api/image?src='+encodeURIComponent(url); }); }
+    catch(e){ last=e; await sleep(500*(i+1)); }
+  }
+  throw last||new Error('img'); }
 function newCanvas(s){ s=s||1080; const c=document.createElement('canvas'); c.width=c.height=s; const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,s,s); return [c,x]; }
 function cover(x,im,X,Y,W,H){ const r=Math.max(W/im.width,H/im.height),w=im.width*r,h=im.height*r; x.save(); x.beginPath(); x.rect(X,Y,W,H); x.clip(); x.drawImage(im,X+(W-w)/2,Y+(H-h)/2,w,h); x.restore(); }
 function contain(x,im,X,Y,W,H){ const r=Math.min(W/im.width,H/im.height),w=im.width*r,h=im.height*r; x.drawImage(im,X+(W-w)/2,Y+(H-h)/2,w,h); }
@@ -653,7 +672,7 @@ async function genImages(p,out){
     const cfg=aiCfg(); const model=cfg.model||'gemini-flash-latest'; let data;
     if((cfg.provider||'gemini')==='openai'){
       const content=[{type:'text',text:CLASSIFY_PROMPT}].concat(urls.map((u,i)=>({type:'image_url',image_url:{url:'data:'+parts[i+1].inline_data.mime_type+';base64,'+parts[i+1].inline_data.data}})));
-      const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},body:JSON.stringify({model:cfg.model||'gpt-4o-mini',messages:[{role:'user',content}]})});
+      const r=await fetchR('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},body:JSON.stringify({model:cfg.model||'gpt-4o-mini',messages:[{role:'user',content}]})});
       if(!r.ok) throw new Error('OpenAI '+r.status); const t=(await r.json()).choices[0].message.content||''; data=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
     } else {
       const t=await geminiGen(cfg, parts); data=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
@@ -682,7 +701,8 @@ async function genImages(p,out){
     if(data.sizeChart>=0 && pick(data.sizeChart)) results.push({name:'06_사이즈', blob:await cContain(pick(data.sizeChart))});
 
     renderImgSet(p,out,results, colors.map(c=>c.name).filter(Boolean));
-  }catch(e){ out.innerHTML='<div class="hint mt">생성 실패: '+esc(e.message||String(e))+'</div>'; }
+  }catch(e){ out.innerHTML='<div class="hint mt">생성이 중단됐어요(네트워크 끊김). <b>다른 앱으로 넘어가지 말고</b> 잠깐 기다려 주세요.<br><button class="ghost sm mt" data-regenimg="'+p.id+'">다시 생성</button> <span class="hint">· '+esc((e.message||'').slice(0,60))+'</span></div>';
+    const rb=out.querySelector('[data-regenimg]'); if(rb) rb.onclick=()=>genImages(p,out); }
 }
 // 전체 저장: 공유 시트로 한 번에 갤러리 저장(안드로이드에서 가장 확실). 안 되면 순차 다운로드로 폴백.
 async function saveAll(results, btn){
