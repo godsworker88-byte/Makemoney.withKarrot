@@ -31,6 +31,11 @@ module.exports = async (req, res) => {
     let name = (meta('og:title') || '').replace(/\s*[:|\-]\s*(시크릿루트|JYCompany|제이와이컴퍼니)\s*$/i, '').trim();
     const ogImage = meta('og:image');
 
+    // 원산지(제조국) 추출: '원산지'/'제조국' 라벨 뒤 첫 텍스트 값
+    let origin = '';
+    const om = html.match(/(?:원산지|제조국)\s*<\/[^>]+>\s*(?:<[^>]+>\s*)*([가-힣][가-힣A-Za-z·() ]{1,18})/);
+    if (om) origin = om[1].trim();
+
     let detail = [], thumbnail = [], all = [];
     if (site.kind === 'imweb') {
       const siteName = meta('og:site_name') || '시크릿루트';
@@ -52,7 +57,7 @@ module.exports = async (req, res) => {
 
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     return res.status(200).json({
-      source: u.href, site: site.kind, name, ogImage,
+      source: u.href, site: site.kind, name, ogImage, origin,
       priceGated: true,
       images: { detail, thumbnail, all },
       counts: { detail: detail.length, thumbnail: thumbnail.length, total: all.length },
