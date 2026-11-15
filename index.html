@@ -616,6 +616,7 @@ function renderGen(p,out){ const g=p.gen||{};
 // ---------- 이미지 세트 생성 (AI 색상분류 + 캔버스 조합) ----------
 const CLASSIFY_PROMPT = `아래는 한 의류 상품 사진 여러 장이야(0번부터 순서대로). 각 사진을 보고 분류해 JSON으로만 답해.
 colors: 색상 그룹 배열. 각 {"name":"한글 색상명","indexes":[그 색 사진번호들],"best":대표로쓸1장번호}. 색이 하나뿐이면 1개.
+  ★ 색상은 하나도 빠뜨리지 말고 모두 찾아. 비슷한 톤(아이보리/크림/베이지, 차콜/블랙 등)도 다른 색이면 합치지 말고 각각 분리해. 색상 라벨(아이보리·차콜 등)이 적힌 사진이 있으면 그 라벨 색을 반드시 포함.
 detail: 원단·포켓·지퍼·밴딩·봉제 등 클로즈업 디테일 사진 번호들.
 model: 사람이 착용한 사진 번호들.
 groupShot: 여러 색이 한 장에 같이 나온 사진 번호(없으면 -1).
@@ -675,7 +676,7 @@ async function genImages(p,out){
   if(!aiCfg().key){ out.innerHTML='<div class="hint mt">먼저 <b>판매 탭 → ⚙ AI 설정</b>에서 Gemini 키를 입력하세요.</div>'; return; }
   out.innerHTML='<div class="hint mt">⏳ 색상 분석 + 이미지 생성 중... (20~40초)</div>';
   try{
-    const urls=p.images.slice(0,10);
+    const urls=p.images.slice(0,16);
     // 1) AI 분류
     const parts=[{text:CLASSIFY_PROMPT}]; for(const u of urls) parts.push(await urlToPart(u));
     const cfg=aiCfg(); const model=cfg.model||'gemini-flash-latest'; let data;
@@ -695,7 +696,7 @@ async function genImages(p,out){
     if(colors.length>=2){ const reps=colors.map(c=>pick(c.best)).filter(Boolean); if(reps.length>=2) results.push({name:'01_전체컬러모음', blob:await cGrid(reps)}); }
     else if(data.groupShot>=0 && pick(data.groupShot)){ results.push({name:'01_전체컬러모음', blob:await cContain(pick(data.groupShot))}); }
     // ② 컬러별
-    for(let i=0;i<colors.length;i++){ const im=pick(colors[i].best); if(im) results.push({name:'02_컬러_'+(colors[i].name||('색상'+(i+1))), blob:await cLabeled(im,colors[i].name||('색상'+(i+1)))}); }
+    for(let i=0;i<colors.length;i++){ const im=pick(colors[i].best) || (colors[i].indexes||[]).map(pick).find(Boolean); if(im) results.push({name:'02_컬러_'+(colors[i].name||('색상'+(i+1))), blob:await cLabeled(im,colors[i].name||('색상'+(i+1)))}); }
     // ③ 디테일 (중복 제거)
     let det=[...new Set(data.detail||[])].map(pick).filter(Boolean).slice(0,4);
     if(det.length<1) det=loaded.filter(Boolean).slice(0,4);
@@ -906,7 +907,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-16-3';
+const APP_VER='2026-11-16-4';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
