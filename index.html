@@ -369,7 +369,7 @@ async function renderCollect(d, url){
   $('c-none').onclick=()=>{ sel.clear(); gal.querySelectorAll('.cell').forEach(c=>c.classList.remove('sel')); updateSel(); };
   const chosen=()=>[...sel].sort((a,b)=>a-b).map(i=>imgs[i]);
   $('c-save').onclick=()=>{
-    const p={ id:uid(), name:d.name||'상품', url, buy:num(d.salePrice)||0, ship:0, sell:0, status:'준비중',
+    const p={ id:uid(), name:d.name||'상품', url, buy:num(d.salePrice)||0, ship:shipFeeFor(url), sell:0, status:'준비중',
       thumb: chosen()[0]||d.ogImage||imgs[0]||'', images: chosen() };
     products.unshift(p); saveProducts();
     toast('상품 관리에 저장됐어요');
