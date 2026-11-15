@@ -4,7 +4,7 @@
 
 const LOGIN_URL = 'https://secretroot.imweb.me/backpg/login.cm';
 
-function parseSetCookie(res) {
+function addSetCookies(jar, res) {
   // undici/Node18+: getSetCookie() 로 개별 Set-Cookie 배열 획득
   let arr = [];
   try { if (typeof res.headers.getSetCookie === 'function') arr = res.headers.getSetCookie(); } catch (e) {}
@@ -12,13 +12,16 @@ function parseSetCookie(res) {
     const raw = res.headers.get('set-cookie');
     if (raw) arr = raw.split(/,(?=[^;]+?=)/);
   }
-  const pairs = [];
   for (const c of arr) {
     const nv = c.split(';')[0].trim();
-    if (nv && /=/.test(nv)) pairs.push(nv);
+    const eq = nv.indexOf('=');
+    if (eq > 0) { const name = nv.slice(0, eq); const val = nv.slice(eq + 1);
+      if (/deleted|^""?$/.test(val)) continue; // 삭제 쿠키 무시
+      jar[name] = val;
+    }
   }
-  return pairs.join('; ');
 }
+function jarToHeader(jar) { return Object.entries(jar).map(([k, v]) => k + '=' + v).join('; '); }
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -48,36 +51,48 @@ module.exports = async (req, res) => {
       back_url: 'Lw==', back_url_auth: '', used_login_btn: 'Y',
       uid, passwd, auto_login: 'Y'
     });
-    const loginRes = await fetch(LOGIN_URL, {
+    const UA = 'Mozilla/5.0 (Linux; Android 14) DainmarketCollector';
+    const jar = {};
+    let loginRes = await fetch(LOGIN_URL, {
       method: 'POST', redirect: 'manual',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 14) DainmarketCollector',
-        'Accept-Language': 'ko'
+        'User-Agent': UA, 'Accept-Language': 'ko'
       },
       body: form
     });
     const loginBody = await loginRes.text();
-    if (/잘못된 아이디|비밀번호|\\uc798\\ubabb\\ub41c/.test(loginBody))
-      return res.status(200).json({ ok: false, reason: '로그인 실패 — 아이디/비밀번호를 확인해주세요.' });
-
-    const cookie = parseSetCookie(loginRes);
-    if (!cookie) return res.status(200).json({ ok: false, reason: '로그인 세션을 받지 못했어요. 비밀번호를 확인해주세요.' });
+    addSetCookies(jar, loginRes);
+    // 로그인 성공이 리다이렉트로 마무리되는 경우, 쿠키를 들고 한 번 따라가 세션 쿠키를 더 모음
+    let hops = 0;
+    while (loginRes.status >= 300 && loginRes.status < 400 && hops < 3) {
+      const loc = loginRes.headers.get('location'); if (!loc) break;
+      loginRes = await fetch(new URL(loc, LOGIN_URL).href, {
+        method: 'GET', redirect: 'manual',
+        headers: { 'Cookie': jarToHeader(jar), 'User-Agent': UA, 'Accept-Language': 'ko' }
+      });
+      addSetCookies(jar, loginRes); hops++;
+    }
+    // 실패 문구(정확히): "잘못된 아이디..." (평문 또는 유니코드 이스케이프). '비밀번호' 단독은 성공 페이지에도 흔해서 제외.
+    const loginFailed = /잘못된 아이디|\\uc798\\ubabb\\ub41c/.test(loginBody);
+    const cookie = jarToHeader(jar);
+    if (!cookie)
+      return res.status(200).json({ ok: false, reason: loginFailed ? '로그인 실패 — 아이디/비밀번호를 확인해주세요.' : '로그인 세션을 받지 못했어요. (' + loginRes.status + ')' });
 
     // 2) 로그인 세션으로 상품 페이지 가져오기
     const pr = await fetch(u.href, {
       headers: {
         'Cookie': cookie,
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 14) DainmarketCollector',
-        'Accept-Language': 'ko'
+        'User-Agent': UA, 'Accept-Language': 'ko'
       }
     });
     if (!pr.ok) return res.status(502).json({ ok: false, reason: '상품 페이지를 불러오지 못했어요. (' + pr.status + ')' });
     const html = await pr.text();
 
-    // 3) 가격 파싱 — 이 상품 전용 commerce 블록
+    // 3) 가격 파싱 — 이 상품 전용 commerce 블록. (가격이 긁히면 = 로그인 성공)
     const m = html.match(/"commerce"\s*:\s*\{\s*"orig_price"\s*:\s*(\d+)\s*,\s*"sale_price"\s*:\s*(\d+)\s*\}/);
     if (!m) {
+      if (loginFailed) return res.status(200).json({ ok: false, reason: '로그인 실패 — 아이디/비밀번호를 확인해주세요.' });
       const gated = /회원공개/.test(html);
       return res.status(200).json({ ok: false, reason: gated ? '가격이 아직 회원공개로 보여요. 로그인 승인 상태를 확인해주세요.' : '가격 정보를 찾지 못했어요.' });
     }

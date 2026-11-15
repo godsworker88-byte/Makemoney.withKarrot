@@ -119,8 +119,10 @@
           <label class="f">아이디(이메일)<input type="text" id="sr-uid" placeholder="시크릿루트 아이디" autocomplete="off"></label>
           <label class="f">비밀번호<input type="password" id="sr-pw" placeholder="이 브라우저에만 저장" autocomplete="off"></label>
           <button class="ghost sm" id="sr-save">저장</button>
+          <button class="ghost sm" id="sr-test">로그인 테스트</button>
           <button class="ghost sm" id="sr-clear">삭제</button>
           <span id="sr-saved" class="hint"></span>
+          <div id="sr-testout" class="hint mt"></div>
         </div>
       </details>
     </div>
@@ -797,6 +799,14 @@ if($('sr-save'))$('sr-save').onclick=()=>{ const uid=$('sr-uid').value.trim(), p
   if(!uid||!passwd){ $('sr-saved').textContent='아이디·비밀번호를 모두 입력하세요'; return; }
   localStorage.setItem('sr_auth',JSON.stringify({uid,passwd})); const s=$('sr-saved'); s.textContent='✓ 저장됨'; setTimeout(()=>s.textContent='',1500); };
 if($('sr-clear'))$('sr-clear').onclick=()=>{ localStorage.removeItem('sr_auth'); $('sr-uid').value=''; $('sr-pw').value=''; const s=$('sr-saved'); s.textContent='삭제됨'; setTimeout(()=>s.textContent='',1500); };
+if($('sr-test'))$('sr-test').onclick=async ()=>{ const uid=$('sr-uid').value.trim(), passwd=$('sr-pw').value; const o=$('sr-testout');
+  if(!uid||!passwd){ o.textContent='아이디·비밀번호를 먼저 입력하세요'; return; }
+  o.textContent='⏳ 로그인 테스트 중...';
+  try{ const r=await fetch(API+'/api/sr-price',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'https://secretroot.imweb.me/?idx=1719',uid,passwd})});
+    const d=await r.json();
+    o.innerHTML = d.ok ? '✅ 로그인 성공! 사입가 <b>'+won(d.salePrice)+'</b> (정가 '+won(d.origPrice)+') — 수집 시 자동으로 채워져요.' : '❌ '+(d.reason||'실패');
+  }catch(e){ o.textContent='오류: '+e.message; }
+};
 
 // ---------- 당근 캡처(AI) ----------
 function aiCfg(){ try{return JSON.parse(localStorage.getItem('ai_cfg'))||{};}catch(e){return{};} }
