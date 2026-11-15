@@ -1,11 +1,12 @@
 // 다인마켓 서비스워커 — HTML/코드는 네트워크 우선(수정 즉시 반영), 오프라인 대비 캐시 백업
-const CACHE = 'dainmarket-v2';
+const CACHE = 'dainmarket-v3';
 const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(()=>self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   if (u.pathname.startsWith('/api/')) return;            // API는 항상 네트워크
+  if (u.pathname.endsWith('/ver.json')) return;          // 버전 체크는 항상 네트워크
   if (e.request.method !== 'GET' || u.origin !== location.origin) return;
   const isDoc = e.request.mode === 'navigate' || u.pathname.endsWith('.html') || u.pathname === '/' || u.pathname.endsWith('/');
   if (isDoc) {

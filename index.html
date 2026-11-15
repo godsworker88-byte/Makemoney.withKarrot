@@ -905,6 +905,18 @@ $('s-date').value=today(); salesPreview(); calc(); renderSales();
 $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
+// 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
+const APP_VER='2026-11-16-3';
+async function checkVer(){
+  try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
+    if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
+      sessionStorage.setItem('vr_'+j.v,'1'); location.reload();
+    }
+  }catch(e){}
+}
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkVer(); });
+setTimeout(checkVer, 1500);
+
 // 공유(share_target)로 들어온 링크 자동 수집: 시크릿루트/JYCompany URL이면 바로 가져오기
 (function(){
   const sp=new URLSearchParams(location.search);
