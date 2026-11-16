@@ -128,6 +128,28 @@
         </div>
       </details>
     </div>
+
+    <div class="card" style="margin-top:12px">
+      <div style="font-weight:700;margin-bottom:4px">바로가기</div>
+      <div class="hint" style="margin-bottom:10px">사이트를 열고, 상품 페이지에서 <b>공유 → 다인마켓</b>을 누르면 바로 수집돼요.</div>
+      <div class="row" style="flex-wrap:wrap;gap:8px">
+        <button class="ghost sm" data-ext="https://secretroot.imweb.me/">🏷️ 시크릿루트</button>
+        <button class="ghost sm" data-ext="https://jycompany.co/">💄 JYCompany</button>
+        <button class="ghost sm" data-ext="https://www.daangn.com/">🥕 당근마켓</button>
+      </div>
+      <div style="height:1px;background:var(--line);margin:14px 0"></div>
+      <label class="f">링크 공유·복사
+        <input type="url" id="lk-url" placeholder="공유하거나 복사할 링크 붙여넣기" inputmode="url">
+      </label>
+      <div class="row" style="flex-wrap:wrap;gap:8px">
+        <button class="ghost sm" id="lk-share">🔗 공유</button>
+        <button class="ghost sm" id="lk-copy">📋 복사</button>
+        <button class="ghost sm" id="lk-collect">⬇️ 이 링크 수집</button>
+        <button class="ghost sm" id="lk-app">📲 앱 공유</button>
+        <span id="lk-msg" class="hint"></span>
+      </div>
+    </div>
+
     <div id="c-result"></div>
   </section>
 
@@ -908,7 +930,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-16-6';
+const APP_VER='2026-11-16-7';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
@@ -918,6 +940,18 @@ async function checkVer(){
 }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkVer(); });
 setTimeout(checkVer, 1500);
+
+// 바로가기 / 링크 공유
+document.querySelectorAll('[data-ext]').forEach(b=>{ b.onclick=()=>window.open(b.dataset.ext,'_blank','noopener'); });
+function lkMsg(t){ const m=$('lk-msg'); if(m){ m.textContent=t; setTimeout(()=>{if(m.textContent===t)m.textContent='';},1800); } }
+async function shareUrl(url,label){ url=(url||'').trim(); if(!url){ lkMsg('링크를 먼저 넣어주세요'); return; }
+  if(navigator.share){ try{ await navigator.share({url}); return; }catch(e){ if(e&&e.name==='AbortError') return; } }
+  try{ await navigator.clipboard.writeText(url); lkMsg('공유를 지원 안 해 복사했어요'); }catch(e){ lkMsg('복사 실패'); } }
+if($('lk-share'))$('lk-share').onclick=()=>shareUrl($('lk-url').value);
+if($('lk-copy'))$('lk-copy').onclick=async ()=>{ const u=($('lk-url').value||'').trim(); if(!u){lkMsg('링크를 먼저 넣어주세요');return;}
+  try{ await navigator.clipboard.writeText(u); lkMsg('✓ 복사됨'); }catch(e){ lkMsg('복사 실패'); } };
+if($('lk-collect'))$('lk-collect').onclick=()=>{ const u=($('lk-url').value||'').trim(); if(!u){lkMsg('링크를 먼저 넣어주세요');return;} $('c-url').value=u; $('c-go').click(); };
+if($('lk-app'))$('lk-app').onclick=()=>shareUrl(location.origin+location.pathname);
 
 // 공유(share_target)로 들어온 링크 자동 수집: 시크릿루트/JYCompany URL이면 바로 가져오기
 (function(){
