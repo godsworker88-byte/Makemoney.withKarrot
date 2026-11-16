@@ -79,12 +79,12 @@
 
   /* 하단 탭바 */
   .tabbar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);
-    border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);
+    border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(6,1fr);
     padding-bottom:env(safe-area-inset-bottom);z-index:50}
-  .tabbar button{background:none;border:none;color:var(--faint);font-size:11px;font-weight:600;
+  .tabbar button{background:none;border:none;color:var(--faint);font-size:10px;font-weight:600;white-space:nowrap;
     padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;width:auto;border-radius:0}
   .tabbar button .ic{font-size:19px;line-height:1;display:inline-flex}
-  .tabbar button .ic svg{width:23px;height:23px;display:block}
+  .tabbar button .ic svg{width:22px;height:22px;display:block}
   .tabbar button.on{color:var(--accent)}
   .bgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .bcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
@@ -957,7 +957,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-16-10';
+const APP_VER='2026-11-16-11';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
