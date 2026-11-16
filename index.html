@@ -164,10 +164,12 @@
     <div class="head">둘러보기</div>
     <div class="card">
       <div class="row" style="gap:8px;margin-bottom:10px">
-        <button class="ghost sm" id="br-reload">🔄 새로고침</button>
-        <button class="ghost sm" data-ext="https://secretroot.imweb.me/">↗ 사이트 전체 열기</button>
+        <button class="chip on" id="br-new" data-mode="new">신상</button>
+        <button class="chip" id="br-random" data-mode="random">랜덤(예전 포함)</button>
+        <button class="ghost sm" id="br-reload" style="margin-left:auto">🔄</button>
+        <button class="ghost sm" data-ext="https://secretroot.imweb.me/">↗ 사이트</button>
       </div>
-      <div class="hint">시크릿루트 신상이에요. 상품을 <b>탭</b>하면 링크복사·수집을 바로 할 수 있어요.</div>
+      <div class="hint">상품을 <b>탭</b>하면 링크복사·수집을 바로 할 수 있어요. <b>랜덤</b>은 예전 상품까지 섞여 나와요(🔄로 다시 뽑기).</div>
     </div>
     <div id="br-grid" style="margin-top:12px"></div>
   </section>
@@ -951,7 +953,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-16-8';
+const APP_VER='2026-11-16-9';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
@@ -966,13 +968,13 @@ setTimeout(checkVer, 1500);
 document.querySelectorAll('[data-ext]').forEach(b=>{ b.onclick=()=>window.open(b.dataset.ext,'_blank','noopener'); });
 
 // 둘러보기(카탈로그)
-let brLoaded=false;
+let brLoaded=false, brMode='new';
 async function renderBrowse(force){
   const g=$('br-grid'); if(!g) return;
   if(brLoaded && !force) return;
-  g.innerHTML='<div class="hint" style="padding:20px 4px">상품 불러오는 중...</div>';
+  g.innerHTML='<div class="hint" style="padding:20px 4px">'+(brMode==='new'?'상품 불러오는 중...':'예전 상품까지 뒤지는 중... (조금 걸려요)')+'</div>';
   try{
-    const r=await fetchR(API+'/api/list'); const d=await r.json();
+    const r=await fetchR(API+'/api/list?mode='+brMode); const d=await r.json();
     if(!d.items || !d.items.length){ g.innerHTML='<div class="hint" style="padding:20px 4px">'+esc(d.error||'상품이 없어요')+'</div>'; return; }
     brLoaded=true;
     const grid=document.createElement('div'); grid.className='bgrid';
@@ -991,6 +993,8 @@ async function renderBrowse(force){
   }catch(e){ g.innerHTML='<div class="hint" style="padding:20px 4px">불러오기 실패 — 새로고침 해보세요</div>'; }
 }
 if($('br-reload'))$('br-reload').onclick=()=>renderBrowse(true);
+['br-new','br-random'].forEach(id=>{ const b=$(id); if(b) b.onclick=()=>{ brMode=b.dataset.mode;
+  document.querySelectorAll('#br-new,#br-random').forEach(x=>x.classList.toggle('on',x===b)); renderBrowse(true); }; });
 function lkMsg(t){ const m=$('lk-msg'); if(m){ m.textContent=t; setTimeout(()=>{if(m.textContent===t)m.textContent='';},1800); } }
 async function shareUrl(url,label){ url=(url||'').trim(); if(!url){ lkMsg('링크를 먼저 넣어주세요'); return; }
   if(navigator.share){ try{ await navigator.share({url}); return; }catch(e){ if(e&&e.name==='AbortError') return; } }
