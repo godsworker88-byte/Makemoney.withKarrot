@@ -59,11 +59,39 @@ async function sampleOlder(maxIdx) {
   return items;
 }
 
+// ---- JYCompany (화장품) ----
+const JY_HOME = 'https://jycompany.co/';
+async function parseJY() {
+  const r = await fetch(JY_HOME, { headers: UA });
+  if (!r.ok) throw new Error('JY홈 ' + r.status);
+  const h = await r.text();
+  const re = /<a[^>]*href="\/products\/([a-z0-9]{10,40})"[\s\S]{0,500}?<img[^>]*\bsrc="([^"]+)"[^>]*\balt="([^"]*)"/gi;
+  const seen = new Set(); const items = []; let m;
+  while ((m = re.exec(h)) && items.length < 60) {
+    const slug = m[1]; if (seen.has(slug)) continue;
+    if (!/cloudfront/.test(m[2])) continue;
+    seen.add(slug);
+    const thumb = m[2].replace(/(-thumb)?\.jpg(\?|$)/i, '-thumb.jpg$2');
+    items.push({ idx: slug, url: JY_HOME + 'products/' + slug, thumb, name: (m[3] || '').replace(/\s+/g, ' ').trim() });
+  }
+  return items;
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(204).end();
   try {
+    const site = (req.query && req.query.site) || 'secretroot';
     const mode = (req.query && req.query.mode) || 'new';
+
+    if (site === 'jycompany') {
+      let items = await parseJY();
+      if (mode === 'random') items = shuffle(items).slice(0, 12);
+      return res.status(200).json({ site, mode, count: items.length, items });
+    }
+
+    // secretroot
     const html = await fetchHome();
     const homeItems = parseHome(html);
     if (mode === 'random' || mode === 'older') {
