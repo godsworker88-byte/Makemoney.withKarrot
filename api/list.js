@@ -65,18 +65,26 @@ async function parseJY() {
   const r = await fetch(JY_HOME, { headers: UA });
   if (!r.ok) throw new Error('JY홈 ' + r.status);
   const h = await r.text();
-  const re = /<a[^>]*href="\/products\/([a-z0-9]{10,40})"[\s\S]{0,500}?<img[^>]*\bsrc="([^"]+)"[^>]*\balt="([^"]*)"/gi;
-  const seen = new Set(); const items = []; let m;
-  while ((m = re.exec(h)) && items.length < 60) {
-    const slug = m[1]; if (seen.has(slug)) continue;
-    if (!/cloudfront/.test(m[2])) continue;
+  // 카드(article) 단위로 쪼개서 '카톤발주만 가능' 상품은 제외(소량 낱개발주만 노출)
+  const cards = h.split(/<article[^>]*product-card[^>]*>/i).slice(1);
+  const seen = new Set(); const items = [];
+  for (const c of cards) {
+    if (items.length >= 60) break;
+    const body = c.split('</article>')[0];
+    if (/카톤발주만/.test(body)) continue;           // 카톤(대량)만 가능 → 제외
+    const slug = (body.match(/\/products\/([a-z0-9]{10,40})/) || [])[1];
+    if (!slug || seen.has(slug)) continue;
+    const img = (body.match(/<img[^>]*\bsrc="([^"]+)"/) || [])[1] || '';
+    if (!/cloudfront/.test(img)) continue;
+    const alt = (body.match(/\balt="([^"]*)"/) || [])[1] || '';
     seen.add(slug);
-    const thumb = m[2].replace(/(-thumb)?\.jpg(\?|$)/i, '-thumb.jpg$2');
-    items.push({ idx: slug, url: JY_HOME + 'products/' + slug, thumb, name: (m[3] || '').replace(/\s+/g, ' ').trim() });
+    const thumb = img.replace(/(-thumb)?\.jpg(\?|$)/i, '-thumb.jpg$2');
+    items.push({ idx: slug, url: JY_HOME + 'products/' + slug, thumb, name: decodeEnt(alt).replace(/\s*\(낱개발주용\)\s*/, '').replace(/\s+/g, ' ').trim() });
   }
   return items;
 }
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function decodeEnt(s) { return (s || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' '); }
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
