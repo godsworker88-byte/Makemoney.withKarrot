@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>다인마켓</title>
-<meta name="theme-color" content="#ff6f3c">
+<meta name="theme-color" content="#f4f1ec">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,9 +12,9 @@
 <style>
   *{box-sizing:border-box}
   :root{
-    --bg:#f7f7f6; --surface:#fff; --line:#ededec; --line2:#e1e1df;
-    --txt:#1b1b1a; --muted:#8c8c88; --faint:#b6b6b2;
-    --accent:#ff6f3c; --accentw:#fff3ee; --pos:#1f8a4c; --neg:#c23b2b; --blue:#4f8cff;
+    --bg:#f4f1ec; --surface:#fffdfb; --line:#e8e3da; --line2:#dcd5c9;
+    --txt:#201d1a; --muted:#8a8378; --faint:#b4ad9f;
+    --accent:#262220; --accentw:#ece7df; --pos:#3f7d5a; --neg:#b24a3c; --blue:#5a7a9c;
   }
   html,body{margin:0;background:var(--bg);color:var(--txt);
     font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic",sans-serif;
@@ -907,7 +907,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-16-4';
+const APP_VER='2026-11-16-5';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
