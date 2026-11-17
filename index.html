@@ -669,7 +669,7 @@ colors: 색상 그룹 배열. 각 {"name":"한글 색상명","indexes":[그 색 
   ★ 색상은 하나도 빠뜨리지 말고 모두 찾아. 비슷한 톤(아이보리/크림/베이지, 차콜/블랙 등)도 다른 색이면 합치지 말고 각각 분리해. 색상 라벨(아이보리·차콜 등)이 적힌 사진이 있으면 그 라벨 색을 반드시 포함.
 detail: 원단·포켓·지퍼·밴딩·봉제 등 클로즈업 디테일 사진 번호들.
 model: 사람이 착용한 사진 번호들.
-groupShot: 여러 색이 한 장에 같이 나온 사진 번호(없으면 -1).
+groupShot: 여러 색상이 한 장에 함께 나온 사진(행거에 여러 색이 걸려있거나 색상들이 나란히 놓인 '색상 모음' 사진) 번호. 이런 사진이 있으면 반드시 그 번호를 넣어(없을 때만 -1).
 sizeChart: 사이즈표·치수(cm, 총장·허리 등 숫자) 이미지 번호(없으면 -1).
 sizeBox: sizeChart 이미지 안에서 '치수(cm)·실측 도식이 있는 부분'만의 영역을 [x,y,w,h](0~1 비율)로. 소재/디테일 사진이나 여백은 빼고 치수 부분만 타이트하게. 이미지 전체가 실측이면 [0,0,1,1]. sizeChart가 -1이면 null.
 오직 JSON만: {"colors":[{"name":"","indexes":[],"best":0}],"detail":[],"model":[],"groupShot":-1,"sizeChart":-1,"sizeBox":null}`;
@@ -751,7 +751,8 @@ async function genImages(p,out){
     const flatUrl =idxOf((colors[0]||{}).best) || idxOf((data.model||[])[0]) || urls[0];
     const modelUrl=flatUrl;
     const results=[]; const fails=[];
-    const hasColor=colors.length>=2, hasSize=data.sizeChart>=0 && idxOf(data.sizeChart);
+    const hasGroup=data.groupShot>=0 && idxOf(data.groupShot);
+    const hasColor=colors.length>=2 || hasGroup, hasSize=data.sizeChart>=0 && idxOf(data.sizeChart);
     const total=2+(hasColor?1:0)+(hasSize?1:0); let done=0;
     const pct=()=>20+(done/total)*78;
     // ① 모델컷 (AI)
@@ -760,11 +761,18 @@ async function genImages(p,out){
     // ② 카탈로그/행거 (AI)
     setProg(out, pct(), '카탈로그컷 생성 중...');
     try{ results.push({name:'02_카탈로그', blob:await geminiImage(cfg, AI_CATALOG_PROMPT, [await urlToPart(flatUrl)])}); }catch(e){ fails.push('카탈로그'); } done++;
-    // ③ 색상 (AI, 색상 2개 이상일 때)
+    // ③ 색상 — 개별 색 2개↑면 AI 합성, 아니면 '여러 색 모음 사진' 원본 사용(색 정확)
     if(hasColor){
       setProg(out, pct(), '색상컷 생성 중...');
-      try{ const cps=await Promise.all(colors.slice(0,5).map(c=>urlToPart(idxOf(c.best)||modelUrl)));
-        results.push({name:'03_색상', blob:await geminiImage(cfg, AI_COLOR_PROMPT, cps)}); }catch(e){ fails.push('색상'); } done++;
+      try{
+        if(colors.length>=2){
+          const cps=await Promise.all(colors.slice(0,5).map(c=>urlToPart(idxOf(c.best)||modelUrl)));
+          results.push({name:'03_색상', blob:await geminiImage(cfg, AI_COLOR_PROMPT, cps)});
+        } else {
+          const gim=await loadImg(urls[data.groupShot]).catch(()=>null);
+          if(gim) results.push({name:'03_색상', blob:await cContain(gim)}); else fails.push('색상');
+        }
+      }catch(e){ fails.push('색상'); } done++;
     }
     // ④ 상세사이즈 (원본 그대로)
     if(hasSize){
@@ -1041,7 +1049,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-17-4';
+const APP_VER='2026-11-17-5';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
