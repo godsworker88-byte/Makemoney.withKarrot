@@ -855,6 +855,7 @@ function showPendingBatch(p,out,msg){
 }
 async function genImages(p,out){
   if(!p||!out) return;
+  if((p.url||'').includes('jycompany')) return genCropImages(p,out);
   if(!p.images||!p.images.length){ out.innerHTML='<div class="hint mt">저장된 사진이 없어요.</div>'; return; }
   if(!aiCfg().key){ out.innerHTML='<div class="hint mt">먼저 <b>판매 탭 → ⚙ AI 설정</b>에서 Gemini 키를 입력하세요.</div>'; return; }
   const pending=batchJobs().find(j=>j.pid===p.id);
@@ -935,6 +936,26 @@ async function checkBatch(job,p,out){
     out.innerHTML='<div class="hint mt">결과 확인 중 오류: '+esc((e.message||'').slice(0,120))+'</div><button class="ghost sm mt" data-batchcheck="'+p.id+'">다시 확인</button>';
     const b=out.querySelector('[data-batchcheck]'); if(b) b.onclick=()=>genImages(p,out);
   }
+}
+// JY 상품: AI 생성 없이 원본 사진을 1:1로 잘라서 7장 (API 비용 0원)
+async function genCropImages(p,out){
+  if(!p.images||!p.images.length){ out.innerHTML='<div class="hint mt">저장된 사진이 없어요.</div>'; return; }
+  const urls=p.images.slice(0,16); const imgs=[];
+  for(let i=0;i<urls.length;i++){
+    setProg(out, 5+(i/urls.length)*70, '사진 불러오는 중...');
+    const im=await loadImg(urls[i]).catch(()=>null);
+    if(im && im.width>=300 && im.height>=300) imgs.push(im);
+  }
+  if(!imgs.length){ out.innerHTML='<div class="hint mt">쓸 만한 사진을 찾지 못했어요. 사진이 충분히 저장됐는지 확인해주세요.</div>'; return; }
+  const n=Math.min(7, imgs.length); const results=[];
+  for(let k=0;k<n;k++){
+    setProg(out, 80+(k/n)*20, '1:1로 자르는 중...');
+    const im=imgs[Math.floor(k*imgs.length/n)];
+    const [c,x]=newCanvas(1080); cover(x,im,0,0,1080,1080);
+    results.push({name:'0'+(k+1)+'_자른사진', blob:await toBlob(c)});
+  }
+  setProg(out,100,'완료!');
+  renderImgSet(p,out,results,[],[]);
 }
 // 전체 저장: 순차 다운로드 → '다운로드 폴더'(갤러리 '다운로드' 앨범)에 저장. 처음 1회 '여러 파일 다운로드 허용' 필요.
 async function saveAll(results, btn){
@@ -1201,7 +1222,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-18-7';
+const APP_VER='2026-11-18-8';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
