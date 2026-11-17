@@ -583,10 +583,11 @@ function copyText(t){ navigator.clipboard?.writeText(t).then(()=>toast('복사�
 function shipFeeFor(url){ return /jycompany\.co/.test(url||'') ? 4000 : 3500; }
 // 시크릿루트 상품명 맨 앞의 업체명 괄호 — 예: '(니트존) 하이넥반지퍼' → '하이넥반지퍼'
 function vName(p){ let n=(p&&p.name)||''; if(((p&&p.url)||'').includes('secretroot')) n=n.replace(/^\s*[\(\[][^\)\]]{1,20}[\)\]]\s*/,''); return n; }
-const GEN_PROMPT = (name, price, fee, features, origin) => `너는 한국 쇼핑몰 '다인마켓'의 상품 등록 도우미야. 아래 상품 사진들을 보고 당근마켓 등에 올릴 "상품 제목"과 "상세설명"을 만들어.
+function isJY(p){ return ((p&&p.url)||'').includes('jycompany'); }
+const GEN_PROMPT = (name, price, fee, features, origin, goods) => `너는 한국 쇼핑몰 '다인마켓'의 상품 등록 도우미야. 아래 상품 사진들을 보고 당근마켓 등에 올릴 "상품 제목"과 "상세설명"을 만들어.
 상품명 힌트: ${name||'(사진 참고)'}
 판매가: ${price?price+'원':'(미입력)'}
-${features?('\n★ 판매자가 강조할 특징(최우선 반영, 사실로 간주): '+features+'\n'):''}${/대한민국|한국|국내/.test(origin||'')?('\n★ 이 상품은 국내제작(원산지 대한민국)이야 — 상세설명에 \'🇰🇷 국내제작\' 같은 신뢰 포인트를 자연스럽게 한 줄 꼭 넣어(표현은 매번 다르게).\n'):''}
+${goods?'\n★ 이 상품은 의류가 아닌 잡화·생활용품이야: 사이즈(SIZE) 줄과 착용·미착용 표현은 모두 빼고, 새상품 여부만 써.\n':''}${features?('\n★ 판매자가 강조할 특징(최우선 반영, 사실로 간주): '+features+'\n'):''}${/대한민국|한국|국내/.test(origin||'')?('\n★ 이 상품은 국내제작(원산지 대한민국)이야 — 상세설명에 \'🇰🇷 국내제작\' 같은 신뢰 포인트를 자연스럽게 한 줄 꼭 넣어(표현은 매번 다르게).\n'):''}
 [중요 원칙]
 - 판매자가 강조할 특징이 있으면 제목과 상세설명에 그 내용을 '최우선'으로 반영해(사실로 간주하고 반영).
 - 업체명·쇼핑몰명(예: 니트존, 시크릿루트 등 괄호 안의 판매처 이름)은 제목과 상세설명 어디에도 넣지 마.
@@ -633,12 +634,12 @@ async function genListing(p, out){
   if(!imgs.length){ out.innerHTML='<div class="hint mt">저장된 상품 사진이 없어요.</div>'; return; }
   out.innerHTML='<div class="hint mt">⏳ 사진 분석 중... (10~30초)</div>';
   try{
-    const fee=shipFeeFor(p.url); const feats=(p.features||'').trim(); const parts=[{text:GEN_PROMPT(vName(p), num(p.sell), fee, feats, p.origin)}];
+    const fee=shipFeeFor(p.url); const feats=(p.features||'').trim(); const parts=[{text:GEN_PROMPT(vName(p), num(p.sell), fee, feats, p.origin, isJY(p))}];
     for(const u of imgs){ parts.push(await urlToPart(u)); }
     const c=aiCfg(); const model=c.model||'gemini-flash-latest';
     let data;
     if((c.provider||'gemini')==='openai'){
-      const content=[{type:'text',text:GEN_PROMPT(vName(p),num(p.sell),fee,feats,p.origin)}].concat(imgs.map((u,i)=>({type:'image_url',image_url:{url:'data:'+parts[i+1].inline_data.mime_type+';base64,'+parts[i+1].inline_data.data}})));
+      const content=[{type:'text',text:GEN_PROMPT(vName(p),num(p.sell),fee,feats,p.origin,isJY(p))}].concat(imgs.map((u,i)=>({type:'image_url',image_url:{url:'data:'+parts[i+1].inline_data.mime_type+';base64,'+parts[i+1].inline_data.data}})));
       const r=await fetchR('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.key},body:JSON.stringify({model:c.model||'gpt-4o-mini',messages:[{role:'user',content}]})});
       if(!r.ok) throw new Error('OpenAI '+r.status); const t=(await r.json()).choices[0].message.content||''; data=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
     } else {
@@ -1222,7 +1223,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-18-8';
+const APP_VER='2026-11-18-9';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
