@@ -64,7 +64,9 @@ const JY_HOME = 'https://jycompany.co/';
 async function parseJY() {
   const r = await fetch(JY_HOME, { headers: UA });
   if (!r.ok) throw new Error('JY홈 ' + r.status);
-  const h = await r.text();
+  return parseJYHtml(await r.text());
+}
+function parseJYHtml(h) {
   // 카드(article) 단위로 쪼개서 '카톤발주만 가능' 상품은 제외(소량 낱개발주만 노출)
   const cards = h.split(/<article[^>]*product-card[^>]*>/i).slice(1);
   const seen = new Set(); const items = [];
@@ -83,6 +85,31 @@ async function parseJY() {
   }
   return items;
 }
+// ---- 검색 (둘러보기 검색창) ----
+// 시크릿루트: /search?type=&keyword=  /  JYCompany: /products?search=
+async function searchSR(q) {
+  const r = await fetch('https://secretroot.imweb.me/search?type=&keyword=' + encodeURIComponent(q), { headers: UA });
+  if (!r.ok) throw new Error('검색 ' + r.status);
+  const h = await r.text();
+  let items = parseHome(h);
+  if (!items.length) {  // 카드 마크업이 달라도 상품 링크+이미지를 넓게 잡는 예비 파싱
+    const seen = new Set(); const re = /href="\/(?:shop\/)?\?idx=(\d+)"[\s\S]{0,400}?<img\b[^>]*\bsrc="([^"]+)"/gi; let m;
+    while ((m = re.exec(h)) && items.length < 30) {
+      if (seen.has(m[1]) || /\/(?:no_image|noimage|blank|loading)/i.test(m[2])) continue;
+      seen.add(m[1]); items.push({ idx: m[1], url: HOME + '?idx=' + m[1], thumb: m[2], name: '' });
+    }
+  }
+  // 이름이 비어 있는 항목은 상품 페이지에서 이름을 읽어 채움 (최대 24개)
+  const need = items.filter(i => !i.name).slice(0, 24);
+  const got = await Promise.all(need.map(i => prod(i.idx)));
+  need.forEach((i, k) => { if (got[k] && got[k].name) i.name = got[k].name; });
+  return items.slice(0, 40);
+}
+async function searchJY(q) {
+  const r = await fetch('https://jycompany.co/products?search=' + encodeURIComponent(q), { headers: UA });
+  if (!r.ok) throw new Error('JY검색 ' + r.status);
+  return parseJYHtml(await r.text()).slice(0, 40);
+}
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 function decodeEnt(s) { return (s || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' '); }
 
@@ -92,6 +119,11 @@ module.exports = async (req, res) => {
   try {
     const site = (req.query && req.query.site) || 'secretroot';
     const mode = (req.query && req.query.mode) || 'new';
+    const q = ((req.query && req.query.q) || '').toString().trim().slice(0, 40);
+    if (q) {
+      const items = site === 'jycompany' ? await searchJY(q) : await searchSR(q);
+      return res.status(200).json({ site, mode: 'search', q, count: items.length, items, error: items.length ? undefined : '검색 결과가 없어요' });
+    }
 
     if (site === 'jycompany') {
       let items = await parseJY();
