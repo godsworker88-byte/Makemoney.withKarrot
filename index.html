@@ -720,14 +720,21 @@ async function cAd(hero,title,price,thumbs){ const [c,x]=newCanvas(1080);
     th.forEach(im=>{ x.save(); roundRect(x,tx,ty,ts,ts,12); x.clip(); cover(x,im,tx,ty,ts,ts); x.restore(); x.strokeStyle='#ececec'; x.lineWidth=2; roundRect(x,tx,ty,ts,ts,12); x.stroke(); tx+=ts+gap; }); }
   return toBlob(c); }
 
+function setProg(out, pct, label){
+  if(!out) return; pct=Math.max(0,Math.min(100,Math.round(pct)));
+  out.innerHTML='<div class="card" style="margin-top:8px;background:var(--bg)">'
+    +'<div class="hint" style="margin-bottom:8px">🎨 '+esc(label||'')+' <b style="color:var(--txt)">'+pct+'%</b></div>'
+    +'<div style="height:9px;background:var(--line);border-radius:6px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--accent);border-radius:6px;transition:width .3s"></div></div></div>';
+}
 async function genImages(p,out){
   if(!p||!out) return;
   if(!p.images||!p.images.length){ out.innerHTML='<div class="hint mt">저장된 사진이 없어요.</div>'; return; }
   if(!aiCfg().key){ out.innerHTML='<div class="hint mt">먼저 <b>판매 탭 → ⚙ AI 설정</b>에서 Gemini 키를 입력하세요.</div>'; return; }
-  out.innerHTML='<div class="hint mt">⏳ 색상 분석 + 이미지 생성 중... (20~40초)</div>';
+  setProg(out, 5, '사진 분석 준비 중...');
   try{
     const urls=p.images.slice(0,16);
     // 1) AI 분류
+    setProg(out, 12, '사진 분석 중...');
     const parts=[{text:CLASSIFY_PROMPT}]; for(const u of urls) parts.push(await urlToPart(u));
     const cfg=aiCfg(); const model=cfg.model||'gemini-flash-latest'; let data;
     if((cfg.provider||'gemini')==='openai'){
@@ -744,22 +751,29 @@ async function genImages(p,out){
     const flatUrl =idxOf((colors[0]||{}).best) || idxOf((data.model||[])[0]) || urls[0];
     const modelUrl=flatUrl;
     const results=[]; const fails=[];
-    out.innerHTML='<div class="hint mt">🎨 AI 이미지 생성 중... (모델컷·카탈로그'+(colors.length>=2?'·색상':'')+', 최대 1분)</div>';
+    const hasColor=colors.length>=2, hasSize=data.sizeChart>=0 && idxOf(data.sizeChart);
+    const total=2+(hasColor?1:0)+(hasSize?1:0); let done=0;
+    const pct=()=>20+(done/total)*78;
     // ① 모델컷 (AI)
-    try{ results.push({name:'01_모델컷', blob:await geminiImage(cfg, AI_MODEL_PROMPT, [await urlToPart(modelUrl)])}); }catch(e){ fails.push('모델컷'); }
+    setProg(out, pct(), '모델컷 생성 중...');
+    try{ results.push({name:'01_모델컷', blob:await geminiImage(cfg, AI_MODEL_PROMPT, [await urlToPart(modelUrl)])}); }catch(e){ fails.push('모델컷'); } done++;
     // ② 카탈로그/행거 (AI)
-    try{ results.push({name:'02_카탈로그', blob:await geminiImage(cfg, AI_CATALOG_PROMPT, [await urlToPart(flatUrl)])}); }catch(e){ fails.push('카탈로그'); }
+    setProg(out, pct(), '카탈로그컷 생성 중...');
+    try{ results.push({name:'02_카탈로그', blob:await geminiImage(cfg, AI_CATALOG_PROMPT, [await urlToPart(flatUrl)])}); }catch(e){ fails.push('카탈로그'); } done++;
     // ③ 색상 (AI, 색상 2개 이상일 때)
-    if(colors.length>=2){
+    if(hasColor){
+      setProg(out, pct(), '색상컷 생성 중...');
       try{ const cps=await Promise.all(colors.slice(0,5).map(c=>urlToPart(idxOf(c.best)||modelUrl)));
-        results.push({name:'03_색상', blob:await geminiImage(cfg, AI_COLOR_PROMPT, cps)}); }catch(e){ fails.push('색상'); }
+        results.push({name:'03_색상', blob:await geminiImage(cfg, AI_COLOR_PROMPT, cps)}); }catch(e){ fails.push('색상'); } done++;
     }
     // ④ 상세사이즈 (원본 그대로)
-    if(data.sizeChart>=0 && idxOf(data.sizeChart)){
+    if(hasSize){
+      setProg(out, pct(), '상세사이즈 처리 중...');
       const sim=await loadImg(urls[data.sizeChart]).catch(()=>null);
       if(sim){ const sb=data.sizeBox; const ok=Array.isArray(sb)&&sb.length===4&&sb.every(v=>v>=0&&v<=1)&&sb[2]>0.05&&sb[3]>0.05;
-        results.push({name:'04_상세사이즈', blob: ok?await cCropBox(sim,{x:+sb[0],y:+sb[1],w:+sb[2],h:+sb[3]}):await cContain(sim)}); }
+        results.push({name:'04_상세사이즈', blob: ok?await cCropBox(sim,{x:+sb[0],y:+sb[1],w:+sb[2],h:+sb[3]}):await cContain(sim)}); } done++;
     }
+    setProg(out, 100, '완료!');
     if(!results.length){ out.innerHTML='<div class="hint mt">이미지 생성에 실패했어요. 할당량(429)이거나 일시 오류일 수 있어요 — 잠시 후 다시 시도해주세요.</div>'; return; }
     p._src={urls, modelIdx:(data.model||[])[0], bestIdx:((colors[0]||{}).best)};
     renderImgSet(p,out,results, colors.map(c=>c.name).filter(Boolean), fails);
@@ -1020,7 +1034,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-17-2';
+const APP_VER='2026-11-17-3';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
