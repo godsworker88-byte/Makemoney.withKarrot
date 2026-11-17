@@ -737,32 +737,31 @@ async function genImages(p,out){
     } else {
       const t=await geminiGen(cfg, parts); data=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
     }
-    // 2) 이미지 로드
-    const loaded=await Promise.all(urls.map(u=>loadImg(u).catch(()=>null)));
-    const pick=i=>(i>=0&&i<loaded.length)?loaded[i]:null;
+    // 2) 생성: 상세사이즈만 원본, 나머지는 나노바나나(AI) 생성
     const colors=(data.colors||[]).filter(c=>c&&(c.indexes?.length||c.best>=0));
-    const results=[];
-    // ① 전체컬러 모음
-    if(colors.length>=2){ const reps=colors.map(c=>pick(c.best)).filter(Boolean); if(reps.length>=2) results.push({name:'01_전체컬러모음', blob:await cGrid(reps)}); }
-    else if(data.groupShot>=0 && pick(data.groupShot)){ results.push({name:'01_전체컬러모음', blob:await cContain(pick(data.groupShot))}); }
-    // ② 컬러별
-    for(let i=0;i<colors.length;i++){ const im=pick(colors[i].best) || (colors[i].indexes||[]).map(pick).find(Boolean); if(im) results.push({name:'02_컬러_'+(colors[i].name||('색상'+(i+1))), blob:await cLabeled(im,colors[i].name||('색상'+(i+1)))}); }
-    // ③ 디테일 (중복 제거)
-    let det=[...new Set(data.detail||[])].map(pick).filter(Boolean).slice(0,4);
-    if(det.length<1) det=loaded.filter(Boolean).slice(0,4);
-    results.push({name:'03_디테일', blob:await cDetail(det)});
-    // ④ 모델형
-    const adbg=pick((data.model||[])[0]) || pick((colors[0]||{}).best) || loaded.find(Boolean);
-    const m1=pick((data.model||[])[0]) || adbg; if(m1) results.push({name:'04_모델착용', blob:await cContain(m1)});
-    // ⑤ 사이즈표 — 치수(실측) 부분만 잘라서
-    if(data.sizeChart>=0 && pick(data.sizeChart)){
-      const sim=pick(data.sizeChart); const sb=data.sizeBox;
-      const ok = Array.isArray(sb)&&sb.length===4 && sb.every(v=>v>=0&&v<=1) && sb[2]>0.05 && sb[3]>0.05;
-      results.push({name:'05_사이즈', blob: ok ? await cCropBox(sim,{x:+sb[0],y:+sb[1],w:+sb[2],h:+sb[3]}) : await cContain(sim)});
+    const idxOf=i=>(i>=0&&i<urls.length)?urls[i]:null;
+    const modelUrl=idxOf((data.model||[])[0]) || idxOf((colors[0]||{}).best) || urls[0];
+    const flatUrl =idxOf((colors[0]||{}).best) || idxOf((data.model||[])[0]) || urls[0];
+    const results=[]; const fails=[];
+    out.innerHTML='<div class="hint mt">🎨 AI 이미지 생성 중... (모델컷·카탈로그'+(colors.length>=2?'·색상':'')+', 최대 1분)</div>';
+    // ① 모델컷 (AI)
+    try{ results.push({name:'01_모델컷', blob:await geminiImage(cfg, AI_MODEL_PROMPT, [await urlToPart(modelUrl)])}); }catch(e){ fails.push('모델컷'); }
+    // ② 카탈로그/행거 (AI)
+    try{ results.push({name:'02_카탈로그', blob:await geminiImage(cfg, AI_CATALOG_PROMPT, [await urlToPart(flatUrl)])}); }catch(e){ fails.push('카탈로그'); }
+    // ③ 색상 (AI, 색상 2개 이상일 때)
+    if(colors.length>=2){
+      try{ const cps=await Promise.all(colors.slice(0,4).map(c=>urlToPart(idxOf(c.best)||modelUrl)));
+        results.push({name:'03_색상', blob:await geminiImage(cfg, AI_COLOR_PROMPT, cps)}); }catch(e){ fails.push('색상'); }
     }
-
+    // ④ 상세사이즈 (원본 그대로)
+    if(data.sizeChart>=0 && idxOf(data.sizeChart)){
+      const sim=await loadImg(urls[data.sizeChart]).catch(()=>null);
+      if(sim){ const sb=data.sizeBox; const ok=Array.isArray(sb)&&sb.length===4&&sb.every(v=>v>=0&&v<=1)&&sb[2]>0.05&&sb[3]>0.05;
+        results.push({name:'04_상세사이즈', blob: ok?await cCropBox(sim,{x:+sb[0],y:+sb[1],w:+sb[2],h:+sb[3]}):await cContain(sim)}); }
+    }
+    if(!results.length){ out.innerHTML='<div class="hint mt">이미지 생성에 실패했어요. 할당량(429)이거나 일시 오류일 수 있어요 — 잠시 후 다시 시도해주세요.</div>'; return; }
     p._src={urls, modelIdx:(data.model||[])[0], bestIdx:((colors[0]||{}).best)};
-    renderImgSet(p,out,results, colors.map(c=>c.name).filter(Boolean));
+    renderImgSet(p,out,results, colors.map(c=>c.name).filter(Boolean), fails);
   }catch(e){ out.innerHTML='<div class="hint mt">생성이 중단됐어요(네트워크 끊김). <b>다른 앱으로 넘어가지 말고</b> 잠깐 기다려 주세요.<br><button class="ghost sm mt" data-regenimg="'+p.id+'">다시 생성</button> <span class="hint">· '+esc((e.message||'').slice(0,60))+'</span></div>';
     const rb=out.querySelector('[data-regenimg]'); if(rb) rb.onclick=()=>genImages(p,out); }
 }
@@ -782,7 +781,8 @@ async function shareAll(results){
 // 한 장 저장: 공유 우선(다운로드 차단돼도 갤러리 저장 가능), 안 되면 다운로드
 // ---- AI 생성형 변형 (Gemini 2.5 Flash Image / 나노바나나) ----
 const AI_IMG_MODELS=['gemini-2.5-flash-image','gemini-3.1-flash-image','gemini-2.5-flash-image-preview'];
-async function geminiImage(cfg, prompt, part){
+async function geminiImage(cfg, prompt, parts){
+  const imgParts=Array.isArray(parts)?parts:[parts];
   const cached=localStorage.getItem('gemini_img_model');
   const tryList=[...new Set([cached, ...AI_IMG_MODELS].filter(Boolean))];
   let lastErr;
@@ -790,7 +790,7 @@ async function geminiImage(cfg, prompt, part){
     try{
       const r=await fetchR('https://generativelanguage.googleapis.com/v1beta/models/'+mdl+':generateContent?key='+encodeURIComponent(cfg.key),
         {method:'POST',headers:{'Content-Type':'application/json'},
-         body:JSON.stringify({contents:[{parts:[{text:prompt}, part]}], generationConfig:{responseModalities:['IMAGE']}})});
+         body:JSON.stringify({contents:[{parts:[{text:prompt}, ...imgParts]}], generationConfig:{responseModalities:['IMAGE']}})});
       if(!r.ok){ lastErr=new Error(mdl+' '+r.status); if(r.status===404||r.status===400){ continue; } throw lastErr; }
       const j=await r.json();
       const parts=((((j.candidates||[])[0]||{}).content)||{}).parts||[];
@@ -806,6 +806,8 @@ async function geminiImage(cfg, prompt, part){
 }
 const AI_MODEL_PROMPT='이 사진 속 의류/상품을 입은(또는 연출한) 자연스러운 한국인 모델의 패션 룩북 컷을 만들어줘. 상품의 색상·패턴·프린트·로고·디테일·실루엣은 원본과 100% 똑같이 유지하고 절대 바꾸지 마. 밝고 깔끔한 스튜디오 또는 자연광 배경, 고급 쇼핑몰 감성. 사진 안에 글자/로고/워터마크는 넣지 마.';
 const AI_PRETTY_PROMPT='이 상품 사진을 깨끗한 스튜디오 배경으로 자연스럽게 보정해줘. 상품의 색상·형태·디테일은 그대로 유지하고, 조명만 밝고 선명하게, 배경은 심플하게. 상품 자체는 변형 금지. 글자/워터마크 넣지 마.';
+const AI_CATALOG_PROMPT='이 옷(상품)을 깔끔한 행거에 건 쇼핑몰 카탈로그/룩북 스타일의 예쁜 컷으로 만들어줘. 밝은 스튜디오 배경, 부드러운 조명. 상품의 색상·패턴·프린트·글자·디테일·실루엣은 원본과 100% 똑같이 유지하고 절대 바꾸지 마. 사진 안에 새 글자/로고/워터마크는 넣지 마.';
+const AI_COLOR_PROMPT='제공한 여러 장의 사진은 같은 디자인의 서로 다른 색상(컬러 베리에이션)이야. 이 색상들을 한 장의 이미지에 예쁘게 나란히(행거에 걸거나 평평하게 정렬) 카탈로그처럼 배치해줘. 각 색상의 원본 색감·패턴·디테일은 그대로 유지하고 새로운 색을 만들어내지 마. 밝고 깔끔한 배경, 새 글자/워터마크 금지.';
 async function genAiVariants(p, out, btn){
   const cfg=aiCfg(); if(!cfg.key){ toast('먼저 AI 설정에서 Gemini 키 입력'); return; }
   const src=p._src||{}; const urls=src.urls||p.images||[];
@@ -817,9 +819,9 @@ async function genAiVariants(p, out, btn){
   const results=[];
   try{
     const mp=await urlToPart(modelUrl);
-    try{ results.push({name:'AI_모델컷', blob:await geminiImage(cfg, AI_MODEL_PROMPT, mp)}); }catch(e){ out.innerHTML='<div class="hint">모델컷 실패: '+esc(e.message||'')+'</div>'; }
+    try{ results.push({name:'AI_모델컷', blob:await geminiImage(cfg, AI_MODEL_PROMPT, [mp])}); }catch(e){ out.innerHTML='<div class="hint">모델컷 실패: '+esc(e.message||'')+'</div>'; }
     const fp=await urlToPart(flatUrl);
-    try{ results.push({name:'AI_예쁜배경', blob:await geminiImage(cfg, AI_PRETTY_PROMPT, fp)}); }catch(e){}
+    try{ results.push({name:'AI_예쁜배경', blob:await geminiImage(cfg, AI_PRETTY_PROMPT, [fp])}); }catch(e){}
     if(!results.length){ out.innerHTML='<div class="hint">AI 변형에 실패했어요. 잠시 후 다시 시도하거나, 할당량(이미지 생성)이 남아있는지 확인해주세요.</div>'; return; }
     out.innerHTML=''; const g=document.createElement('div'); g.className='gal';
     results.forEach(r=>{ const u=URL.createObjectURL(r.blob); const c=document.createElement('div'); c.className='cell sel'; c.innerHTML='<img src="'+u+'">'; c.title=r.name; c.onclick=()=>shareOrDownload(r); g.appendChild(c); });
@@ -838,11 +840,13 @@ async function shareOrDownload(r){
   const u=URL.createObjectURL(r.blob); const a=document.createElement('a'); a.href=u; a.download=r.name+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),10000);
   toast('저장 시도 — 안 되면 다운로드 허용 필요');
 }
-function renderImgSet(p,out,results,colorNames){
+function renderImgSet(p,out,results,colorNames,fails){
   out.innerHTML=''; const wrap=document.createElement('div'); wrap.className='card'; wrap.style.marginTop='8px'; wrap.style.background='var(--bg)';
   const head=document.createElement('div'); head.className='hint'; head.style.fontWeight='600'; head.style.marginBottom='8px';
   head.textContent='생성된 이미지 '+results.length+'장'+(colorNames&&colorNames.length?' · 색상: '+colorNames.join('/'):'');
   wrap.appendChild(head);
+  if(fails&&fails.length){ const fn=document.createElement('div'); fn.className='hint'; fn.style.marginBottom='8px'; fn.style.color='var(--neg)';
+    fn.textContent='⚠️ '+fails.join('·')+' 생성 실패(할당량/일시오류) — "다시 생성"으로 재시도해보세요.'; wrap.appendChild(fn); }
   const grid=document.createElement('div'); grid.className='gal'; wrap.appendChild(grid);
   results.forEach(r=>{ const url=URL.createObjectURL(r.blob); const cell=document.createElement('div'); cell.className='cell sel'; cell.innerHTML='<img src="'+url+'">'; cell.title=r.name;
     cell.onclick=()=>shareOrDownload(r); grid.appendChild(cell); });
@@ -853,8 +857,8 @@ function renderImgSet(p,out,results,colorNames){
   wrap.appendChild(sh);
   // ✨ AI 생성형 변형
   const aiBox=document.createElement('div'); aiBox.style.marginTop='14px'; aiBox.style.paddingTop='14px'; aiBox.style.borderTop='1px solid var(--line)';
-  aiBox.innerHTML='<div class="hint" style="margin-bottom:6px">✨ <b>AI 변형</b> — 상품은 그대로 두고 새 모델컷·예쁜 배경 생성 (생성형이라 할당량/비용을 더 써요)</div>';
-  const aiBtn=document.createElement('button'); aiBtn.className='ghost sm'; aiBtn.style.width='100%'; aiBtn.textContent='✨ AI 모델컷·배경 변형 (2장)';
+  aiBox.innerHTML='<div class="hint" style="margin-bottom:6px">✨ <b>마음에 안 들면 추가로 더 뽑기</b> — 다른 모델컷·배경을 새로 생성해요 (할당량 더 써요)</div>';
+  const aiBtn=document.createElement('button'); aiBtn.className='ghost sm'; aiBtn.style.width='100%'; aiBtn.textContent='✨ 모델컷·배경 추가 생성';
   const aiOut=document.createElement('div'); aiOut.style.marginTop='10px';
   aiBtn.onclick=()=>genAiVariants(p, aiOut, aiBtn);
   aiBox.appendChild(aiBtn); aiBox.appendChild(aiOut); wrap.appendChild(aiBox);
@@ -1015,7 +1019,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-16-13';
+const APP_VER='2026-11-17-1';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
