@@ -770,8 +770,15 @@ async function genImages(p,out){
     if(hasSize){
       setProg(out, pct(), '상세사이즈 처리 중...');
       const sim=await loadImg(urls[data.sizeChart]).catch(()=>null);
-      if(sim){ const sb=data.sizeBox; const ok=Array.isArray(sb)&&sb.length===4&&sb.every(v=>v>=0&&v<=1)&&sb[2]>0.05&&sb[3]>0.05;
-        results.push({name:'04_상세사이즈', blob: ok?await cCropBox(sim,{x:+sb[0],y:+sb[1],w:+sb[2],h:+sb[3]}):await cContain(sim)}); } done++;
+      if(sim){ const sb=data.sizeBox; let blob;
+        const ok=Array.isArray(sb)&&sb.length===4&&sb.every(v=>v>=0&&v<=1)&&sb[2]>0.18&&sb[3]>0.18;
+        if(ok){ // 치수 숫자 안 잘리게 사방 여백 추가
+          const pad=0.12;
+          const x=Math.max(0, +sb[0]-pad), y=Math.max(0, +sb[1]-pad);
+          const w=Math.min(1-x, +sb[2]+pad*2), h=Math.min(1-y, +sb[3]+pad*2);
+          blob = (w>0.88 && h>0.88) ? await cContain(sim) : await cCropBox(sim,{x,y,w,h});
+        } else { blob = await cContain(sim); }
+        results.push({name:'04_상세사이즈', blob}); } done++;
     }
     setProg(out, 100, '완료!');
     if(!results.length){ out.innerHTML='<div class="hint mt">이미지 생성에 실패했어요. 할당량(429)이거나 일시 오류일 수 있어요 — 잠시 후 다시 시도해주세요.</div>'; return; }
@@ -1034,7 +1041,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-17-3';
+const APP_VER='2026-11-17-4';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
