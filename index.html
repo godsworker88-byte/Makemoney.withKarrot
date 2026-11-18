@@ -329,6 +329,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
+let pPick=new Set(), pPickMode=false, imgStore={};
 const API = location.origin.includes('github.io') ? '' : ''; // same-origin /api on Vercel
 const $ = id => document.getElementById(id);
 const won = n => (Math.round(n||0)).toLocaleString('ko-KR') + '원';
@@ -482,6 +483,7 @@ function renderProducts(){
     const c=document.createElement('div'); c.className='card';
     c.innerHTML=`
       <div class="phead" data-toggle="${p.id}" style="display:flex;gap:10px;align-items:center;cursor:pointer">
+        ${pPickMode?'<input type="checkbox" data-pick="'+p.id+'"'+(pPick.has(p.id)?' checked':'')+' style="width:22px;height:22px;flex:none">':''}
         <img src="${p.thumb?(API+'/api/image?src='+encodeURIComponent(p.thumb)):''}" style="width:52px;height:52px;border-radius:9px;object-fit:cover;background:var(--bg);flex:none">
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
@@ -539,6 +541,8 @@ function renderProducts(){
   box.querySelectorAll('[data-genimg]').forEach(b=>b.onclick=()=>genImages(products.find(x=>x.id===b.dataset.genimg), box.querySelector(`[data-imgout="${b.dataset.genimg}"]`)));
   list.forEach(p=>{ if(p.gen) renderGen(p, box.querySelector(`[data-genout="${p.id}"]`)); });
   batchJobs().forEach(j=>{ const p=products.find(x=>x.id===j.pid); const el=box.querySelector(`[data-imgout="${j.pid}"]`); if(p&&el) showPendingBatch(p, el, j.state==='완료 ✅'?'생성이 끝났어요.':'일괄 생성 진행 중이에요.'); });
+  list.forEach(p=>{ const st=imgStore[p.id]; const el=box.querySelector(`[data-imgout="${p.id}"]`); if(st&&el&&!batchJobs().some(j=>j.pid===p.id)) showStoredImgs(p,el,st); });
+  box.querySelectorAll('[data-pick]').forEach(el=>el.onclick=e=>{ e.stopPropagation(); if(el.checked) pPick.add(el.dataset.pick); else pPick.delete(el.dataset.pick); renderBatchBar(); });
   box.querySelectorAll('[data-imgs]').forEach(b=>b.onclick=async ()=>{ const p=products.find(x=>x.id===b.dataset.imgs); if(!p||!p.images?.length){toast('저장된 사진이 없어요');return;}
     b.textContent='⏳...'; b.disabled=true;
     try{ const zip=new JSZip();
@@ -937,6 +941,7 @@ async function checkBatch(job,p,out){
     }catch(e){ fails.push(nm); } });
     aiCountAdd(results.filter(r=>job.names.includes(r.name)).length);
     results.push(...(await buildOriginals(job)));
+    saveStoredImgs(job.pid, results);
     saveBatchJobs(batchJobs().filter(x=>x!==job));
     if(!results.length){ out.innerHTML='<div class="hint mt">결과 이미지가 없어요. 안전필터이거나 생성 실패일 수 있어요.</div>'; return; }
     setProg(out,100,'완료!');
@@ -964,18 +969,55 @@ async function genCropImages(p,out){
     results.push({name:'0'+(k+1)+'_자른사진', blob:await toBlob(c)});
   }
   setProg(out,100,'완료!');
+  saveStoredImgs(p.id, results);
   renderImgSet(p,out,results,[],[]);
 }
 // ---- 배치 진행 현황 + 월간 생성 장수/비용 ----
 function renderBatchBar(){
   const bb=$('p-batch'); if(!bb) return;
-  const jobs=batchJobs();
-  if(!jobs.length){ bb.innerHTML=''; return; }
-  const rows=jobs.map(j=>{ const p=products.find(x=>x.id===j.pid); const nm=p?(p.name||'상품'):'(삭제된 상품)';
-    return '<div class="hint" style="display:flex;justify-content:space-between;gap:8px"><span>'+esc(nm)+'</span><b style="color:var(--txt);white-space:nowrap">'+esc(j.state||'접수됨')+'</b></div>'; }).join('');
-  bb.innerHTML='<div class="card" style="background:var(--bg)"><div class="hint" style="font-weight:600;margin-bottom:6px">🎨 이미지 일괄 생성 '+jobs.length+'개 진행 중</div>'+rows
-    +'<button class="ghost sm" id="p-batch-check" style="margin-top:8px">🔄 전체 상태 확인</button></div>';
+  const jobs=batchJobs(); let html='';
+  if(jobs.length){
+    const rows=jobs.map(j=>{ const p=products.find(x=>x.id===j.pid); const nm=p?(p.name||'상품'):'(삭제된 상품)';
+      return '<div class="hint" style="display:flex;justify-content:space-between;gap:8px"><span>'+esc(nm)+'</span><b style="color:var(--txt);white-space:nowrap">'+esc(j.state||'접수됨')+'</b></div>'; }).join('');
+    html+='<div class="card" style="background:var(--bg)"><div class="hint" style="font-weight:600;margin-bottom:6px">🎨 이미지 일괄 생성 '+jobs.length+'개 진행 중</div>'+rows
+      +'<button class="ghost sm" id="p-batch-check" style="margin-top:8px">🔄 전체 상태 확인</button></div>';
+  }
+  if(pPickMode){
+    html+='<div class="card" style="background:var(--bg);margin-top:8px"><div class="hint" style="margin-bottom:8px">☑ 상품을 체크하세요 · 선택 <b>'+pPick.size+'</b>개 (한 번에 최대 10개, JY 상품은 제외)</div>'
+      +'<div class="row" style="gap:8px"><button class="btn sm" id="p-pick-go" style="flex:1">🎨 선택 '+pPick.size+'개 일괄 생성</button><button class="ghost sm" id="p-pick-cancel">취소</button></div></div>';
+  } else {
+    html+='<button class="ghost sm" id="p-pick-on" style="width:100%;margin-bottom:8px">☑ 여러 상품 선택해서 일괄 생성</button>';
+  }
+  bb.innerHTML=html;
   const b=$('p-batch-check'); if(b) b.onclick=checkAllBatches;
+  const on=$('p-pick-on'); if(on) on.onclick=()=>{ pPickMode=true; renderProducts(); };
+  const go=$('p-pick-go'); if(go) go.onclick=bulkGen;
+  const cc=$('p-pick-cancel'); if(cc) cc.onclick=()=>{ pPick.clear(); pPickMode=false; renderProducts(); };
+}
+async function bulkGen(){
+  const ids=[...pPick].filter(id=>{ const p=products.find(x=>x.id===id);
+    return p && (p.images||[]).length && !batchJobs().some(j=>j.pid===id) && !((p.url||'').includes('jycompany')); });
+  if(!ids.length){ toast('접수할 상품이 없어요 (사진 없음·이미 진행 중·JY 제외)'); return; }
+  if(ids.length>10){ toast('한 번에 최대 10개까지예요'); return; }
+  for(let i=0;i<ids.length;i++){
+    toast('일괄 접수 '+(i+1)+'/'+ids.length);
+    const p=products.find(x=>x.id===ids[i]);
+    const el=document.querySelector(`[data-imgout="${ids[i]}"]`)||document.createElement('div');
+    await genImages(p, el);
+  }
+  pPick.clear(); pPickMode=false; renderProducts(); toast('일괄 접수 완료');
+}
+// ---- 결과 자동 보관 (기기 안 IndexedDB: 브라우저 재시작·앱 재실행 후에도 유지) ----
+function idbOpen(){ return new Promise((res,rej)=>{ const rq=indexedDB.open('dainmk',1); rq.onupgradeneeded=()=>rq.result.createObjectStore('imgs'); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); }
+async function idbWrite(pid,val){ const db=await idbOpen(); return new Promise((res,rej)=>{ const tx=db.transaction('imgs','readwrite'); if(val===undefined) tx.objectStore('imgs').delete(pid); else tx.objectStore('imgs').put(val,pid); tx.oncomplete=()=>{db.close();res();}; tx.onerror=()=>rej(tx.error); }); }
+async function idbLoadAll(){ const db=await idbOpen(); return new Promise((res,rej)=>{ const out={}; const tx=db.transaction('imgs','readonly'); const rq=tx.objectStore('imgs').openCursor(); rq.onsuccess=()=>{ const c=rq.result; if(c){ out[c.key]=c.value; c.continue(); } }; tx.oncomplete=()=>{db.close();res(out);}; tx.onerror=()=>rej(tx.error); }); }
+function saveStoredImgs(pid,results){ imgStore[pid]={ts:Date.now(), results}; idbWrite(pid,imgStore[pid]).catch(()=>{}); }
+function showStoredImgs(p,el,st){
+  renderImgSet(p,el,st.results,[],[]);
+  const info=document.createElement('div'); info.className='hint'; info.style.marginTop='6px'; info.textContent='저장된 결과 · '+new Date(st.ts).toLocaleString('ko-KR');
+  const d=document.createElement('button'); d.className='ghost sm'; d.style.marginTop='6px'; d.textContent='🗑 저장된 결과 지우기';
+  d.onclick=()=>{ delete imgStore[p.id]; idbWrite(p.id,undefined).catch(()=>{}); renderProducts(); };
+  el.appendChild(info); el.appendChild(d);
 }
 async function checkAllBatches(){
   const btn=$('p-batch-check'); if(btn){ btn.disabled=true; btn.textContent='확인 중...'; }
@@ -1232,6 +1274,7 @@ function dgCands(cands){ const box=$('dg-result'); box.innerHTML='';
 // AI 설정 UI
 (function(){ const c=aiCfg(); $('ai-provider').value=c.provider||'gemini'; $('ai-key').value=c.key||''; $('ai-model').value=c.model||''; })();
 $('ai-provider').onchange=()=>$('ai-model').placeholder=$('ai-provider').value==='openai'?'gpt-4o-mini':'gemini-flash-latest';
+idbLoadAll().then(m=>{ imgStore=m; renderProducts(); }).catch(()=>{});
 renderAiUsage();
 $('ai-save').onclick=()=>{ localStorage.setItem('ai_cfg',JSON.stringify({provider:$('ai-provider').value,key:$('ai-key').value.trim(),model:$('ai-model').value.trim()})); const s=$('ai-saved'); s.textContent='✓ 저장됨'; setTimeout(()=>s.textContent='',1500); };
 
@@ -1263,7 +1306,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-18-11';
+const APP_VER='2026-11-18-12';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
