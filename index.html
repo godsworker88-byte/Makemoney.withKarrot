@@ -188,6 +188,7 @@
     <input type="search" id="p-search" placeholder="🔍 상품명·특징·카테고리 검색" style="margin-bottom:10px">
     <div id="p-cats" class="row" style="gap:6px;margin-bottom:12px"></div>
     <datalist id="catlist"></datalist>
+    <div id="p-batch"></div>
     <div id="p-list"></div>
     <div class="hint" id="p-empty" style="display:none">아직 저장된 상품이 없어요. <b>상품 수집</b>에서 링크로 가져와 저장해보세요.</div>
   </section>
@@ -254,6 +255,7 @@
             <label class="f">API 키<input type="password" id="ai-key" placeholder="이 브라우저에만 저장"></label>
             <label class="f">모델(비우면 기본값)<input type="text" id="ai-model" placeholder="gemini-flash-latest"></label>
             <button class="ghost sm" id="ai-save">저장</button> <span id="ai-saved" class="hint"></span>
+            <div class="hint" id="ai-usage" style="margin-top:8px"></div>
           </div>
         </details>
       </div>
@@ -456,7 +458,7 @@ async function renderCollect(d, url){
 let pSearch='', pCat='';
 const pExpanded = new Set();
 function renderProducts(){
-  const box=$('p-list'); box.innerHTML='';
+  const box=$('p-list'); box.innerHTML=''; renderBatchBar();
   // 카테고리 칩
   const cats=[...new Set(products.map(p=>(p.category||'').trim()).filter(Boolean))].sort();
   $('catlist').innerHTML=cats.map(c=>`<option value="${esc(c)}">`).join('');
@@ -536,6 +538,7 @@ function renderProducts(){
   box.querySelectorAll('[data-gen]').forEach(b=>b.onclick=()=>genListing(products.find(x=>x.id===b.dataset.gen), box.querySelector(`[data-genout="${b.dataset.gen}"]`)));
   box.querySelectorAll('[data-genimg]').forEach(b=>b.onclick=()=>genImages(products.find(x=>x.id===b.dataset.genimg), box.querySelector(`[data-imgout="${b.dataset.genimg}"]`)));
   list.forEach(p=>{ if(p.gen) renderGen(p, box.querySelector(`[data-genout="${p.id}"]`)); });
+  batchJobs().forEach(j=>{ const p=products.find(x=>x.id===j.pid); const el=box.querySelector(`[data-imgout="${j.pid}"]`); if(p&&el) showPendingBatch(p, el, j.state==='완료 ✅'?'생성이 끝났어요.':'일괄 생성 진행 중이에요.'); });
   box.querySelectorAll('[data-imgs]').forEach(b=>b.onclick=async ()=>{ const p=products.find(x=>x.id===b.dataset.imgs); if(!p||!p.images?.length){toast('저장된 사진이 없어요');return;}
     b.textContent='⏳...'; b.disabled=true;
     try{ const zip=new JSZip();
@@ -932,6 +935,7 @@ async function checkBatch(job,p,out){
       const d=ip.inlineData||ip.inline_data;
       results.push({name:nm, blob:b64ToBlob(d.data, d.mimeType||d.mime_type)});
     }catch(e){ fails.push(nm); } });
+    aiCountAdd(results.filter(r=>job.names.includes(r.name)).length);
     results.push(...(await buildOriginals(job)));
     saveBatchJobs(batchJobs().filter(x=>x!==job));
     if(!results.length){ out.innerHTML='<div class="hint mt">결과 이미지가 없어요. 안전필터이거나 생성 실패일 수 있어요.</div>'; return; }
@@ -961,6 +965,37 @@ async function genCropImages(p,out){
   }
   setProg(out,100,'완료!');
   renderImgSet(p,out,results,[],[]);
+}
+// ---- 배치 진행 현황 + 월간 생성 장수/비용 ----
+function renderBatchBar(){
+  const bb=$('p-batch'); if(!bb) return;
+  const jobs=batchJobs();
+  if(!jobs.length){ bb.innerHTML=''; return; }
+  const rows=jobs.map(j=>{ const p=products.find(x=>x.id===j.pid); const nm=p?(p.name||'상품'):'(삭제된 상품)';
+    return '<div class="hint" style="display:flex;justify-content:space-between;gap:8px"><span>'+esc(nm)+'</span><b style="color:var(--txt);white-space:nowrap">'+esc(j.state||'접수됨')+'</b></div>'; }).join('');
+  bb.innerHTML='<div class="card" style="background:var(--bg)"><div class="hint" style="font-weight:600;margin-bottom:6px">🎨 이미지 일괄 생성 '+jobs.length+'개 진행 중</div>'+rows
+    +'<button class="ghost sm" id="p-batch-check" style="margin-top:8px">🔄 전체 상태 확인</button></div>';
+  const b=$('p-batch-check'); if(b) b.onclick=checkAllBatches;
+}
+async function checkAllBatches(){
+  const btn=$('p-batch-check'); if(btn){ btn.disabled=true; btn.textContent='확인 중...'; }
+  const jobs=batchJobs(); const key=aiCfg().key;
+  for(const j of jobs){
+    try{
+      const r=await fetchR('https://generativelanguage.googleapis.com/v1beta/'+j.op+'?key='+encodeURIComponent(key));
+      const d=await r.json(); const st=String((d.metadata&&d.metadata.state)||d.state||'');
+      j.state = (/SUCCEEDED/.test(st)||d.done) ? '완료 ✅' : /FAILED|CANCELLED|EXPIRED/.test(st) ? '실패 ❌' : '생성 중 ⏳';
+    }catch(e){ j.state='확인 실패'; }
+  }
+  saveBatchJobs(jobs); renderProducts();
+}
+function aiMonthKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function aiCountAdd(n){ if(!n) return; const k='ai_cnt_'+aiMonthKey(); localStorage.setItem(k, String((+localStorage.getItem(k)||0)+n)); renderAiUsage(); }
+function renderAiUsage(){
+  const el=$('ai-usage'); if(!el) return;
+  const n=+localStorage.getItem('ai_cnt_'+aiMonthKey())||0;
+  const won=Math.round(n*0.0168*1400);
+  el.textContent='이번 달 AI 생성: '+n+'장 · 약 '+won.toLocaleString()+'원 (배치 단가 기준 추정, 환율 1,400원 가정)';
 }
 // 전체 저장: 순차 다운로드 → '다운로드 폴더'(갤러리 '다운로드' 앨범)에 저장. 처음 1회 '여러 파일 다운로드 허용' 필요.
 async function saveAll(results, btn){
@@ -1197,6 +1232,7 @@ function dgCands(cands){ const box=$('dg-result'); box.innerHTML='';
 // AI 설정 UI
 (function(){ const c=aiCfg(); $('ai-provider').value=c.provider||'gemini'; $('ai-key').value=c.key||''; $('ai-model').value=c.model||''; })();
 $('ai-provider').onchange=()=>$('ai-model').placeholder=$('ai-provider').value==='openai'?'gpt-4o-mini':'gemini-flash-latest';
+renderAiUsage();
 $('ai-save').onclick=()=>{ localStorage.setItem('ai_cfg',JSON.stringify({provider:$('ai-provider').value,key:$('ai-key').value.trim(),model:$('ai-model').value.trim()})); const s=$('ai-saved'); s.textContent='✓ 저장됨'; setTimeout(()=>s.textContent='',1500); };
 
 // =========================================================
@@ -1227,7 +1263,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-18-10';
+const APP_VER='2026-11-18-11';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
