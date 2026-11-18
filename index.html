@@ -689,14 +689,15 @@ function renderGen(p,out){ const g=p.gen||{};
 
 // ---------- 이미지 세트 생성 (AI 색상분류 + 캔버스 조합) ----------
 const CLASSIFY_PROMPT = `아래는 한 의류 상품 사진 여러 장이야(0번부터 순서대로). 각 사진을 보고 분류해 JSON으로만 답해.
-colors: 색상 그룹 배열. 각 {"name":"한글 색상명","indexes":[그 색 사진번호들],"best":대표로쓸1장번호}. 색이 하나뿐이면 1개.
+colors: 색상 그룹 배열. 각 {"name":"한글 색상명","indexes":[그 색 사진번호들],"best":대표로쓸1장번호,"model":그 색상을 사람이 착용한 사진번호(없으면 -1)}. 색이 하나뿐이면 1개.
+  ★ model은 반드시 같은 색 옷을 입은 모델 사진이어야 해. 다른 색 착용 사진은 넣지 마.
   ★ 색상은 하나도 빠뜨리지 말고 모두 찾아. 비슷한 톤(아이보리/크림/베이지, 차콜/블랙 등)도 다른 색이면 합치지 말고 각각 분리해. 색상 라벨(아이보리·차콜 등)이 적힌 사진이 있으면 그 라벨 색을 반드시 포함.
 detail: 원단·포켓·지퍼·밴딩·봉제 등 클로즈업 디테일 사진 번호들.
 model: 사람이 착용한 사진 번호들.
 groupShot: 여러 색상이 한 장에 함께 나온 사진(행거에 여러 색이 걸려있거나 색상들이 나란히 놓인 '색상 모음' 사진) 번호. 이런 사진이 있으면 반드시 그 번호를 넣어(없을 때만 -1).
 sizeChart: 사이즈표·치수(cm, 총장·허리 등 숫자) 이미지 번호(없으면 -1).
 sizeBox: sizeChart 이미지 안에서 '치수(cm)·실측 도식이 있는 부분'만의 영역을 [x,y,w,h](0~1 비율)로. 소재/디테일 사진이나 여백은 빼고 치수 부분만 타이트하게. 이미지 전체가 실측이면 [0,0,1,1]. sizeChart가 -1이면 null.
-오직 JSON만: {"colors":[{"name":"","indexes":[],"best":0}],"detail":[],"model":[],"groupShot":-1,"sizeChart":-1,"sizeBox":null}`;
+오직 JSON만: {"colors":[{"name":"","indexes":[],"best":0,"model":-1}],"detail":[],"model":[],"groupShot":-1,"sizeChart":-1,"sizeBox":null}`;
 
 async function loadImg(url, tries=3){ let last;
   for(let i=0;i<tries;i++){ await whenVisible();
@@ -891,7 +892,7 @@ async function genImages(p,out){
     const idxOf=i=>(i>=0&&i<urls.length)?urls[i]:null;
     const flatUrl=idxOf((colors[0]||{}).best)||idxOf((data.model||[])[0])||urls[0];
     const hasSize=data.sizeChart>=0 && idxOf(data.sizeChart)!=null;
-    const shotList=colors.length ? colors.slice(0,6).map(c=>({name:(c.name||'').trim(), src: idxOf(c.best)||flatUrl})) : [{name:'', src:flatUrl}];
+    const shotList=colors.length ? colors.slice(0,6).map(c=>{ const mu=idxOf(c.model); return {name:(c.name||'').trim(), src: mu||idxOf(c.best)||flatUrl, fromModel: !!mu}; }) : [{name:'', src:flatUrl, fromModel:false}];
     const hasMulti=colors.length>=2;
     const detailUrls=(data.detail||[]).map(idxOf).filter(Boolean).slice(0,4);
     // 상품당 정확히 7장 (우선순위: 카탈로그 → 상세사이즈 → 색상별 착샷 → 색상 연출 → 디테일 → 무드)
@@ -907,9 +908,9 @@ async function genImages(p,out){
     const reqs=[];
     for(const sl of slots){
       if(sl.k==='cat') reqs.push({name:'00_카탈로그', text:AI_CATALOG_PROMPT, imgUrls:[flatUrl]});
-      else if(sl.k==='wear'){ const s=shotList[sl.i]; reqs.push({name:'0'+(sl.i+1)+'_착샷_'+(s.name||'상품'), text:wearPrompt(s.name, sl.i, false), imgUrls:[s.src]}); }
+      else if(sl.k==='wear'){ const s=shotList[sl.i]; reqs.push({name:'0'+(sl.i+1)+'_착샷_'+(s.name||'상품'), text:wearPrompt(s.name, sl.i, false, null, s.fromModel), imgUrls:[s.src]}); }
       else if(sl.k==='multi') reqs.push({name:'색상_연출', text:AI_COLOR_PROMPT, imgUrls:colors.slice(0,4).map(c=>idxOf(c.best)||flatUrl)});
-      else if(sl.k==='mood') reqs.push({name:'무드_'+(sl.i+1), text:wearPrompt(shotList[0].name, shotList.length+sl.i+1, false, MOODS[sl.i]), imgUrls:[shotList[0].src]});
+      else if(sl.k==='mood') reqs.push({name:'무드_'+(sl.i+1), text:wearPrompt(shotList[0].name, shotList.length+sl.i+1, false, MOODS[sl.i], shotList[0].fromModel), imgUrls:[shotList[0].src]});
     }
     const inlineReqs=[];
     for(const r of reqs){ const pts=[{text:r.text}]; for(const u of r.imgUrls) pts.push(await urlToPart(u));
@@ -1091,10 +1092,15 @@ const AI_PRETTY_PROMPT='이 상품 사진을 깨끗한 스튜디오 배경으로
 const AI_CATALOG_PROMPT='이 옷(상품)을 깔끔한 행거에 건 쇼핑몰 카탈로그/룩북 스타일의 예쁜 컷으로 만들어줘. 밝은 스튜디오 배경, 부드러운 조명. 상품의 색상·패턴·프린트·글자·디테일·실루엣은 원본과 100% 똑같이 유지하고 절대 바꾸지 마. 사진 안에 새 글자/로고/워터마크는 넣지 마.';
 const MOODS=['따뜻한 자연광이 드는 카페 창가','도시 골목의 세련된 시티 무드','미니멀한 화이트 스튜디오 하이패션 에디토리얼','우드 소품이 있는 아늑한 실내 룩북','초록 나무 아래 야외 봄 감성 촬영'];
 const WEAR_POSES=['정면을 보고 자연스럽게 선 전신컷','한 손을 주머니에 넣고 살짝 옆으로 선 3/4 각도','한 발을 살짝 내디딘 걷는 듯한 반신컷','의자에 가볍게 기대어 앉은 자세','살짝 뒤를 돌아보는 전신 자세','팔짱을 낀 측면 반신컷'];
-function wearPrompt(color,i,hasRef,scene){
-  return '첫 번째 이미지는 상품(의류) 원본이야. 이 옷의 실루엣·기장·소매·넥라인·단추/지퍼 위치·패턴·질감과 색상'+(color?'('+color+')':'')+'을 100% 그대로 유지하고 절대 바꾸지 마. 이 옷을 입은 한국인 모델의 새로운 착샷을 만들어줘.'
-    +' 포즈: '+WEAR_POSES[i%WEAR_POSES.length]+'.'
-    +' 함께 입은 하의·신발·가방·액세서리는 원본과 무관하게 새롭고 세련된 조합으로 코디해도 돼(상품 옷과 색이 겹치거나 상품처럼 보이면 안 됨).'
+function wearPrompt(color,i,hasRef,scene,fromModel){
+  const first = fromModel
+    ? '첫 번째 이미지는 실제 모델이 이 상품을 입은 사진이야. 이 사진을 기준으로 포즈·배경·조명만 새로 바꿔줘(포즈는 자세를 살짝만 다르게, 옷이 잘 보이는 범위에서).'
+    : '첫 번째 이미지는 상품(의류) 원본이야. 이 옷을 입은 한국인 모델의 새로운 착샷을 만들어줘.';
+  return first
+    +' 옷(상품)의 형태는 원본과 100% 똑같이 유지해: 실루엣·기장·허리밴드·끈(드로스트링)·밑단 커프스·단추/지퍼·주머니·봉제선·패턴·질감·색상'+(color?'('+color+')':'')+'.'
+    +' 원본에 없는 앞선·장식·로고를 새로 그리거나, 원본에 있는 디테일을 빼거나 바꾸지 마.'
+    +(fromModel?'':' 포즈: '+WEAR_POSES[i%WEAR_POSES.length]+'.')
+    +' 상품이 아닌 다른 종류 옷(상의나 하의 중 상품이 아닌 쪽)과 신발·가방·액세서리는 새로 코디해도 돼. 단 상품과 색이 겹치거나 상품처럼 보이면 안 돼.'
     +(scene ? ' 배경과 분위기: '+scene+'. 기존 사진과 확실히 다른 연출로.' : ' 배경은 밝고 고급스러운 온라인 쇼핑몰 편집숍 감성(자연광 실내 또는 미니멀 스튜디오)으로, 기존 사진과 확실히 다른 분위기로.')
     +(hasRef?' 두 번째 이미지는 같은 쇼핑몰 세트의 앞선 컷이야. 모델의 얼굴 인상·조명·배경 톤만 맞추고, 그 컷의 옷 색·코디·포즈는 따라 하지 마.':'')
     +' 사진 안에 글자·로고·워터마크·가격표는 넣지 마.';
@@ -1347,7 +1353,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-18-13';
+const APP_VER='2026-11-18-14';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
