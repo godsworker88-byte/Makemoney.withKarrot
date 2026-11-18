@@ -258,6 +258,14 @@
             <div class="hint" id="ai-usage" style="margin-top:8px"></div>
           </div>
         </details>
+        <details style="margin-top:12px"><summary class="hint">📊 구글 시트 자동 업데이트 (판매·통계)</summary>
+          <div class="card" style="margin-top:8px">
+            <label class="f">웹앱 주소<input type="text" id="sheet-url" placeholder="https://script.google.com/macros/s/.../exec"></label>
+            <label class="f">비밀 토큰<input type="password" id="sheet-token" placeholder="스크립트에 적은 TOKEN과 같은 값"></label>
+            <button class="ghost sm" id="sheet-save">저장</button> <button class="ghost sm" id="sheet-now">지금 업데이트</button>
+            <div class="hint" id="sheet-status" style="margin-top:8px"></div>
+          </div>
+        </details>
       </div>
     </details>
 
@@ -329,7 +337,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
-let pPick=new Set(), pPickMode=false, imgStore={};
+let pPick=new Set(), pPickMode=false, imgStore={}, sheetTimer=null;
 const API = location.origin.includes('github.io') ? '' : ''; // same-origin /api on Vercel
 const $ = id => document.getElementById(id);
 const won = n => (Math.round(n||0)).toLocaleString('ko-KR') + '원';
@@ -356,7 +364,7 @@ document.querySelectorAll('.tabbar button').forEach(b=>b.onclick=()=>{
 const load = (k,def) => { try{ const v=JSON.parse(localStorage.getItem(k)); return v??def; }catch(e){ return def; } };
 let sales = load('dm_sales', []);
 let products = load('dm_products', []);
-const saveSales = () => localStorage.setItem('dm_sales', JSON.stringify(sales));
+const saveSales = () => { localStorage.setItem('dm_sales', JSON.stringify(sales)); scheduleSheetSync(); };
 const saveProducts = () => localStorage.setItem('dm_products', JSON.stringify(products));
 
 // =========================================================
@@ -1276,6 +1284,39 @@ function dgCands(cands){ const box=$('dg-result'); box.innerHTML='';
 $('ai-provider').onchange=()=>$('ai-model').placeholder=$('ai-provider').value==='openai'?'gpt-4o-mini':'gemini-flash-latest';
 idbLoadAll().then(m=>{ imgStore=m; renderProducts(); }).catch(()=>{});
 renderAiUsage();
+// ---- 구글 시트 자동 업데이트 (판매 기록 + 통계) ----
+function sheetCfg(){ try{ return JSON.parse(localStorage.getItem('sheet_cfg'))||{}; }catch(e){ return {}; } }
+function buildSheetPayload(){
+  const done=sales.filter(r=>r.status!=='환불'&&r.status!=='취소');
+  const salesHeader=['날짜','상품명','판매가','원가','배송비','기타','수수료(3.3%)','순이익','상태','결제','출고예정일','발송방법','발송메모','당근아이디'];
+  const salesRows=sales.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(r=>[
+    r.date||'', r.name||'', num(r.price), num(r.cost), num(r.ship), num(r.etc), feeOf(r.price), salesMargin(r),
+    r.status||'', r.pay||'', r.shipDate||'', r.shipMethod||'', r.shipMemo||'', r.karrotId||'' ]);
+  let s=0,cost=0,exp=0,profit=0; const by={};
+  done.forEach(r=>{ s+=num(r.price); cost+=num(r.cost); exp+=num(r.ship)+num(r.etc)+feeOf(r.price); profit+=salesMargin(r);
+    const m=(r.date||'').slice(0,7)||'-'; (by[m]=by[m]||{n:0,s:0,p:0}); by[m].n++; by[m].s+=num(r.price); by[m].p+=salesMargin(r); });
+  const statsRows=[['항목','값'],['총매출',s],['총순이익',profit],['총원가',cost],['총비용(배송+기타+수수료)',exp],['판매건수',done.length],
+    ['평균 마진율(%)', s?Number((profit/s*100).toFixed(1)):0],['업데이트', new Date().toLocaleString('ko-KR')],[],['월','건수','매출','순이익']]
+    .concat(Object.keys(by).sort().reverse().map(m=>[m,by[m].n,by[m].s,by[m].p]));
+  return { salesHeader, sales:salesRows, stats:statsRows };
+}
+function renderSheetStatus(){ const el=$('sheet-status'); if(el) el.textContent='마지막 업데이트 요청: '+(localStorage.getItem('sheet_last')||'없음'); }
+function scheduleSheetSync(){ if(!sheetCfg().url) return; clearTimeout(sheetTimer); sheetTimer=setTimeout(()=>syncSheet(false),3000); }
+async function syncSheet(manual){
+  const c=sheetCfg();
+  if(!c.url){ if(manual) toast('먼저 시트 웹앱 주소를 저장하세요'); return; }
+  const payload=Object.assign({token:c.token||''}, buildSheetPayload());
+  try{
+    // Apps Script 웹앱은 응답을 CORS로 읽을 수 없어서 no-cors로 보냄(전송 성공 여부만 알 수 없음)
+    await fetch(c.url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+    localStorage.setItem('sheet_last', new Date().toLocaleString('ko-KR'));
+    if(manual) toast('시트 업데이트 요청을 보냈어요');
+  }catch(e){ if(manual) toast('시트 업데이트 실패 (네트워크)'); }
+  renderSheetStatus();
+}
+$('sheet-save').onclick=()=>{ localStorage.setItem('sheet_cfg',JSON.stringify({url:$('sheet-url').value.trim(), token:$('sheet-token').value.trim()})); toast('저장했어요'); renderSheetStatus(); };
+$('sheet-now').onclick=()=>syncSheet(true);
+(function(){ const c=sheetCfg(); $('sheet-url').value=c.url||''; $('sheet-token').value=c.token||''; renderSheetStatus(); })();
 $('ai-save').onclick=()=>{ localStorage.setItem('ai_cfg',JSON.stringify({provider:$('ai-provider').value,key:$('ai-key').value.trim(),model:$('ai-model').value.trim()})); const s=$('ai-saved'); s.textContent='✓ 저장됨'; setTimeout(()=>s.textContent='',1500); };
 
 // =========================================================
@@ -1306,7 +1347,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-18-12';
+const APP_VER='2026-11-18-13';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
