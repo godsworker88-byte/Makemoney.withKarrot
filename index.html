@@ -712,9 +712,10 @@ colors: 색상 그룹 배열. 각 {"name":"한글 색상명","indexes":[그 색 
 detail: 원단·포켓·지퍼·밴딩·봉제 등 클로즈업 디테일 사진 번호들.
 model: 사람이 착용한 사진 번호들.
 groupShot: 여러 색상이 한 장에 함께 나온 사진(행거에 여러 색이 걸려있거나 색상들이 나란히 놓인 '색상 모음' 사진) 번호. 이런 사진이 있으면 반드시 그 번호를 넣어(없을 때만 -1).
+type: 이 상품이 무슨 옷인지 한 단어로 "상의"|"하의"|"원피스"|"아우터"|"세트"|"기타" 중 하나.
 sizeChart: 사이즈표·치수(cm, 총장·허리 등 숫자) 이미지 번호(없으면 -1).
 sizeBox: sizeChart 이미지 안에서 '치수(cm)·실측 도식이 있는 부분'만의 영역을 [x,y,w,h](0~1 비율)로. 소재/디테일 사진이나 여백은 빼고 치수 부분만 타이트하게. 이미지 전체가 실측이면 [0,0,1,1]. sizeChart가 -1이면 null.
-오직 JSON만: {"colors":[{"name":"","indexes":[],"best":0,"model":-1}],"detail":[],"model":[],"groupShot":-1,"sizeChart":-1,"sizeBox":null}`;
+오직 JSON만: {"colors":[{"name":"","indexes":[],"best":0,"model":-1}],"detail":[],"model":[],"groupShot":-1,"type":"기타","sizeChart":-1,"sizeBox":null}`;
 
 async function loadImg(url, tries=3){ let last;
   for(let i=0;i<tries;i++){ await whenVisible();
@@ -786,13 +787,16 @@ async function origBlob(url){ const r=await fetchR(API+'/api/image?src='+encodeU
 // 배경 교체용 장면 목록(컷마다 다르게)
 const BG_SCENES=['밝고 깔끔한 미니멀 화이트 스튜디오','따뜻한 우드톤의 아늑한 실내','부드러운 베이지 벽 스튜디오','채광 좋은 밝은 실내','연한 그레이 배경 스튜디오','감성적인 편집숍 인테리어','깔끔한 아이보리 배경','자연광 드는 거실'];
 // 편집 프롬프트: 옷은 그대로, 배경/행거/얼굴/쪽지만 편집
-function editPrompt(isModel, scene){
-  const base='아래 사진을 편집해줘. ★옷(상품) 자체는 절대 바꾸지 마: 형태·실루엣·색상·패턴·프린트·단추·지퍼·끈·밑단 커프스·주머니·기장·주름·접힘까지 100% 원본 그대로 유지. 원본에 없는 디테일을 새로 만들거나 원본에 있는 디테일을 지우지 마.';
-  const common=' 편집할 것: (1) 배경을 '+scene+'(으)로 자연스럽게 교체. (2) 상품에 붙은 쪽지·가격표·택·스티커·손글씨·인쇄 글자가 있으면 흔적 없이 제거.';
-  const extra= isModel
-    ? ' (3) 모델의 얼굴만 다른 한국인 여성 얼굴로 자연스럽게 교체해(헤어·체형·포즈·손·옷 위치는 그대로). 몸과 옷의 구도는 원본과 동일하게.'
-    : ' (3) 옷걸이/행거가 보이면 다른 디자인의 깔끔한 행거로 교체(옷의 위치·각도·주름은 그대로).';
-  return base+common+extra+' 상품의 위치·크기·구도·각도는 원본과 똑같이 두고, 옷(특히 바지·원피스 등 긴 옷)은 기장 끝(밑단)까지 잘리지 않고 전체가 다 보이게 세로로 긴 구도를 유지해. 사진에 새 글자·로고·워터마크는 넣지 마.';
+function editPrompt(isModel, scene, ptype){
+  const other = ptype==='하의' ? '상의(니트·티셔츠 등)' : ptype==='상의' ? '하의(바지·스커트 등)' : (ptype==='원피스'||ptype==='아우터') ? '함께 매치한 다른 옷' : '함께 입은 다른 옷';
+  const prod = (ptype && ptype!=='기타') ? ('이 상품은 '+ptype) : '이 상품(옷)';
+  const base = prod+'이야. '+prod+'의 형태·실루엣·색상·패턴·단추·지퍼·끈·밑단 커프스·주머니·기장·주름·접힘까지 100% 원본 그대로 유지하고 절대 바꾸지 마. 원본에 없는 디테일을 새로 만들거나 원본에 있는 디테일을 지우지 마.';
+  const common = ' 편집할 것: (1) 배경을 '+scene+'(으)로 자연스럽게 교체. (2) 상품에 붙은 쪽지·가격표·택·스티커·손글씨·인쇄 글자가 있으면 흔적 없이 제거.';
+  const extra = isModel
+    ? ' (3) 모델의 얼굴만 다른 한국인 여성 얼굴로 자연스럽게 교체(체형·포즈·손·'+prod+'의 위치는 그대로). (4) 함께 입은 '+other+'와 신발·가방·액세서리는 '+prod+'와 색이 겹치지 않는 다른 것으로 바꿔도 돼(단 '+prod+' 자체는 그대로).'
+    : ' (3) 옷걸이/행거가 보이면 다른 디자인의 깔끔한 행거로 교체('+prod+'의 위치·각도·주름은 그대로).';
+  const frame = ' 결과는 정사각형(1:1) 구도로, '+prod+'가 잘리지 않고 전체가 다 보이게 담아줘'+(ptype==='하의'?'(바지는 밑단 끝까지 꼭 보이게, 다리가 잘리면 안 됨)':(ptype==='원피스'?'(원피스 밑단까지 다 보이게)':''))+'. 사진에 새 글자·로고·워터마크는 넣지 마.';
+  return base+common+extra+frame;
 }
 function showPendingBatch(p,out,msg){
   out.innerHTML='<div class="card" style="margin-top:8px;background:var(--bg)"><div class="hint" style="margin-bottom:8px">⏳ '+esc(msg)+' 일괄 생성은 보통 몇 시간 안에 끝나고, 최대 24시간까지 걸릴 수 있어요. 나중에 다시 눌러 결과를 받아오세요.</div><button class="ghost sm" data-batchcheck="'+p.id+'">결과 확인</button></div>';
@@ -816,6 +820,7 @@ async function genImages(p,out){
     const idxOf=i=>(i>=0&&i<urls.length)?urls[i]:null;
     const flatUrl=idxOf((colors[0]||{}).best)||idxOf((data.model||[])[0])||urls[0];
     const modelSet=new Set((data.model||[]).filter(i=>i>=0));
+    const ptype=(data.type||'').trim();
     // 변형(배경·행거·얼굴·쪽지 편집) 후보: 색상 대표 + 색상 모델 + 색상모음 + 나머지 모델샷
     const trans=[]; const seenT=new Set();
     const addT=(idx,isModel,nm)=>{ if(idx==null||idx<0||idx>=urls.length||seenT.has(idx))return; seenT.add(idx); trans.push({idx,url:urls[idx],isModel,nm:(nm||'').trim()}); };
@@ -838,12 +843,12 @@ async function genImages(p,out){
     // 변형컷만 AI 배치 요청 (원본컷은 완료 시 그대로 처리)
     const reqs=useTrans.map((t,i)=>({
       name: String(i+1).padStart(2,'0')+'_'+(t.isModel?'모델':'상품')+(t.nm?'_'+t.nm:''),
-      text: editPrompt(t.isModel, BG_SCENES[i%BG_SCENES.length]),
+      text: editPrompt(t.isModel, BG_SCENES[i%BG_SCENES.length], ptype),
       imgUrls: [t.url]
     }));
     const inlineReqs=[];
     for(const r of reqs){ const pts=[{text:r.text}]; for(const u of r.imgUrls) pts.push(await urlToPart(u));
-      inlineReqs.push({request:{contents:[{parts:pts}], generationConfig:{responseModalities:['IMAGE'], imageConfig:{aspectRatio:'3:4'}}}}); }
+      inlineReqs.push({request:{contents:[{parts:pts}], generationConfig:{responseModalities:['IMAGE'], imageConfig:{aspectRatio:'1:1'}}}}); }
     setProg(out,70,'일괄 생성 요청 보내는 중...');
     const body={batch:{display_name:'dain-'+p.id+'-'+Date.now(), input_config:{requests:{requests:inlineReqs}}}};
     const r=await fetchR('https://generativelanguage.googleapis.com/v1beta/models/'+BATCH_MODEL+':batchGenerateContent?key='+encodeURIComponent(cfg.key),
@@ -1351,7 +1356,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-23-7';
+const APP_VER='2026-11-23-8';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
