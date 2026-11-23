@@ -986,10 +986,15 @@ function renderBatchBar(){
   const bb=$('p-batch'); if(!bb) return;
   const jobs=batchJobs(); let html='';
   if(jobs.length){
+    const doneN=jobs.filter(j=>/완료/.test(j.state||'')).length;
     const rows=jobs.map(j=>{ const p=products.find(x=>x.id===j.pid); const nm=p?(p.name||'상품'):'(삭제된 상품)';
-      return '<div class="hint" style="display:flex;justify-content:space-between;gap:8px"><span>'+esc(nm)+'</span><b style="color:var(--txt);white-space:nowrap">'+esc(j.state||'접수됨')+'</b></div>'; }).join('');
+      return '<div class="hint" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(nm)+'</span><b style="color:var(--txt);white-space:nowrap">'+esc(j.state||'접수됨')+'</b><button class="del" data-batchx="'+esc(j.op)+'" title="목록에서 지우기">✕</button></div>'; }).join('');
     html+='<div class="card" style="background:var(--bg)"><div class="hint" style="font-weight:600;margin-bottom:6px">🎨 이미지 일괄 생성 '+jobs.length+'개 진행 중</div>'+rows
-      +'<button class="ghost sm" id="p-batch-check" style="margin-top:8px">🔄 전체 상태 확인</button></div>';
+      +'<div class="row" style="gap:8px;margin-top:8px">'
+      +'<button class="ghost sm" id="p-batch-check" style="flex:1">🔄 전체 상태 확인</button>'
+      +(doneN?'<button class="btn sm" id="p-batch-done" style="flex:1">✅ 완료분 '+doneN+'개 받고 비우기</button>':'')
+      +'</div>'
+      +'<button class="ghost sm" id="p-batch-clear" style="width:100%;margin-top:8px">🗑 목록 전체 비우기</button></div>';
   }
   if(pPickMode){
     html+='<div class="card" style="background:var(--bg);margin-top:8px"><div class="hint" style="margin-bottom:8px">☑ 상품을 체크하세요 · 선택 <b>'+pPick.size+'</b>개 (한 번에 최대 10개, JY 상품은 제외)</div>'
@@ -999,6 +1004,9 @@ function renderBatchBar(){
   }
   bb.innerHTML=html;
   const b=$('p-batch-check'); if(b) b.onclick=checkAllBatches;
+  const bd=$('p-batch-done'); if(bd) bd.onclick=clearDoneBatches;
+  const bc=$('p-batch-clear'); if(bc) bc.onclick=()=>askDel('완료분을 포함해 목록을 모두 비울까요? 아직 결과를 받지 않은 완료 건은 이미지가 사라질 수 있어요. (이미 저장된 결과는 상품에 그대로 남아요)',()=>{ saveBatchJobs([]); renderProducts(); toast('목록을 비웠어요'); });
+  bb.querySelectorAll('[data-batchx]').forEach(x=>x.onclick=(e)=>{ e.stopPropagation(); const op=x.dataset.batchx; saveBatchJobs(batchJobs().filter(j=>j.op!==op)); renderProducts(); });
   const on=$('p-pick-on'); if(on) on.onclick=()=>{ pPickMode=true; renderProducts(); };
   const go=$('p-pick-go'); if(go) go.onclick=bulkGen;
   const cc=$('p-pick-cancel'); if(cc) cc.onclick=()=>{ pPick.clear(); pPickMode=false; renderProducts(); };
@@ -1039,6 +1047,38 @@ async function checkAllBatches(){
     }catch(e){ j.state='확인 실패'; }
   }
   saveBatchJobs(jobs); renderProducts();
+}
+// 한 배치 작업 결과를 받아 저장 (성공 시 true). 화면 렌더 없이 조용히 처리
+async function pullBatchResults(job){
+  const r=await fetchR('https://generativelanguage.googleapis.com/v1beta/'+job.op+'?key='+encodeURIComponent(aiCfg().key));
+  if(!r.ok) throw new Error('상태 '+r.status);
+  const j=await r.json();
+  const rr=j.response||{};
+  const list=Array.isArray(rr.inlinedResponses)?rr.inlinedResponses:((rr.inlinedResponses||{}).inlinedResponses||[]);
+  const results=[], fails=[];
+  job.names.forEach((nm,i)=>{ try{
+    const item=list[i]; const cand=((item.response||{}).candidates||[])[0]||{};
+    const ps=(cand.content||{}).parts||[]; const ip=ps.find(x=>x.inlineData||x.inline_data);
+    if(!ip) throw new Error('no image');
+    const d=ip.inlineData||ip.inline_data;
+    results.push({name:nm, blob:b64ToBlob(d.data, d.mimeType||d.mime_type)});
+  }catch(e){ fails.push(nm); } });
+  aiCountAdd(results.length);
+  results.push(...(await buildOriginals(job)));
+  if(results.length) saveStoredImgs(job.pid, results);
+  return results.length>0;
+}
+// 완료된 작업들의 결과를 모두 받아 저장하고 목록에서 제거
+async function clearDoneBatches(){
+  const btn=$('p-batch-done'); if(btn){ btn.disabled=true; btn.textContent='받는 중...'; }
+  const jobs=batchJobs(); const done=jobs.filter(j=>/완료/.test(j.state||''));
+  let ok=0, fail=0;
+  for(const j of done){
+    try{ const got=await pullBatchResults(j); if(got) ok++; else fail++; saveBatchJobs(batchJobs().filter(x=>x.op!==j.op)); }
+    catch(e){ fail++; }
+  }
+  renderProducts();
+  toast('완료분 '+ok+'개 저장'+(fail?' · '+fail+'개 실패':''));
 }
 function aiMonthKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function aiCountAdd(n){ if(!n) return; const k='ai_cnt_'+aiMonthKey(); localStorage.setItem(k, String((+localStorage.getItem(k)||0)+n)); renderAiUsage(); }
@@ -1353,7 +1393,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-18-14';
+const APP_VER='2026-11-23-1';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
