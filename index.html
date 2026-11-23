@@ -827,7 +827,10 @@ async function genImages(p,out){
     // 원본 그대로(변형 금지): 사이즈표 + 디테일(최대 2)
     const origs=[]; const seenO=new Set();
     const addO=(idx,nm)=>{ if(idx==null||idx<0||idx>=urls.length||seenO.has(idx)||seenT.has(idx))return; seenO.add(idx); origs.push({name:nm, url:urls[idx]}); };
-    if(data.sizeChart>=0) addO(data.sizeChart, '사이즈표');
+    // 상세사이즈는 무조건 1장: 분류 실패 시 '아직 변형에 안 쓴 마지막 사진'(대개 실측 치수 사진)을 사용
+    let sizeIdx = (data.sizeChart>=0 && data.sizeChart<urls.length) ? data.sizeChart : -1;
+    if(sizeIdx<0){ for(let k=urls.length-1;k>=0;k--){ if(!seenT.has(k)){ sizeIdx=k; break; } } }
+    if(sizeIdx>=0) addO(sizeIdx, '사이즈표');
     (data.detail||[]).slice(0,2).forEach((d,i)=>addO(d, '디테일'+(i+1)));
     // 합계 최대 8장: 사이즈·디테일 원본 먼저 확보, 나머지는 변형컷으로 채움
     const TARGET=8;
@@ -1349,7 +1352,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-23-5';
+const APP_VER='2026-11-23-6';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
