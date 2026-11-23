@@ -785,7 +785,7 @@ async function buildOriginals(job){
 // 원본 이미지 바이트를 변형 없이 그대로 가져오기
 async function origBlob(url){ const r=await fetchR(API+'/api/image?src='+encodeURIComponent(url)); if(!r||!r.ok) throw new Error('img'); return await r.blob(); }
 // 배경 교체용 장면 목록(컷마다 다르게)
-const BG_SCENES=['밝고 깔끔한 미니멀 화이트 스튜디오','따뜻한 우드톤의 아늑한 실내','부드러운 베이지 벽 스튜디오','채광 좋은 밝은 실내','연한 그레이 배경 스튜디오','감성적인 편집숍 인테리어','깔끔한 아이보리 배경','자연광 드는 거실'];
+const BG_SCENES=['깨끗한 순백색 미니멀 배경','부드러운 아이보리 단색 배경','연한 그레이 미니멀 스튜디오','따뜻한 베이지 단색 배경','은은한 오트밀 톤 단색 배경','밝은 라이트그레이 미니멀 배경'];
 // 편집 프롬프트: 옷은 그대로, 배경/행거/얼굴/쪽지만 편집
 function editPrompt(isModel, scene, ptype){
   const other = ptype==='하의' ? '상의(니트·티셔츠 등)' : ptype==='상의' ? '하의(바지·스커트 등)' : (ptype==='원피스'||ptype==='아우터') ? '함께 매치한 다른 옷' : '함께 입은 다른 옷';
@@ -1356,7 +1356,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-23-8';
+const APP_VER='2026-11-23-9';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
