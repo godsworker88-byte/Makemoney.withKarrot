@@ -792,7 +792,7 @@ function editPrompt(isModel, scene){
   const extra= isModel
     ? ' (3) 모델의 얼굴만 다른 한국인 여성 얼굴로 자연스럽게 교체해(헤어·체형·포즈·손·옷 위치는 그대로). 몸과 옷의 구도는 원본과 동일하게.'
     : ' (3) 옷걸이/행거가 보이면 다른 디자인의 깔끔한 행거로 교체(옷의 위치·각도·주름은 그대로).';
-  return base+common+extra+' 상품의 위치·크기·구도·각도는 원본과 똑같이 두고, 사진에 새 글자·로고·워터마크는 넣지 마.';
+  return base+common+extra+' 상품의 위치·크기·구도·각도는 원본과 똑같이 두고, 옷(특히 바지·원피스 등 긴 옷)은 기장 끝(밑단)까지 잘리지 않고 전체가 다 보이게 세로로 긴 구도를 유지해. 사진에 새 글자·로고·워터마크는 넣지 마.';
 }
 function showPendingBatch(p,out,msg){
   out.innerHTML='<div class="card" style="margin-top:8px;background:var(--bg)"><div class="hint" style="margin-bottom:8px">⏳ '+esc(msg)+' 일괄 생성은 보통 몇 시간 안에 끝나고, 최대 24시간까지 걸릴 수 있어요. 나중에 다시 눌러 결과를 받아오세요.</div><button class="ghost sm" data-batchcheck="'+p.id+'">결과 확인</button></div>';
@@ -827,10 +827,9 @@ async function genImages(p,out){
     // 원본 그대로(변형 금지): 사이즈표 + 디테일(최대 2)
     const origs=[]; const seenO=new Set();
     const addO=(idx,nm)=>{ if(idx==null||idx<0||idx>=urls.length||seenO.has(idx)||seenT.has(idx))return; seenO.add(idx); origs.push({name:nm, url:urls[idx]}); };
-    // 상세사이즈는 무조건 1장: 분류 실패 시 '아직 변형에 안 쓴 마지막 사진'(대개 실측 치수 사진)을 사용
-    let sizeIdx = (data.sizeChart>=0 && data.sizeChart<urls.length) ? data.sizeChart : -1;
-    if(sizeIdx<0){ for(let k=urls.length-1;k>=0;k--){ if(!seenT.has(k)){ sizeIdx=k; break; } } }
-    if(sizeIdx>=0) addO(sizeIdx, '사이즈표');
+    // 상세사이즈는 무조건 1장: 분류되면 그걸, 아니면 맨 마지막 사진(대개 실측 치수)을 그대로
+    let sizeIdx = (data.sizeChart>=0 && data.sizeChart<urls.length) ? data.sizeChart : (urls.length-1);
+    if(sizeIdx>=0){ origs.push({name:'사이즈표', url:urls[sizeIdx]}); seenO.add(sizeIdx); }
     (data.detail||[]).slice(0,2).forEach((d,i)=>addO(d, '디테일'+(i+1)));
     // 합계 최대 8장: 사이즈·디테일 원본 먼저 확보, 나머지는 변형컷으로 채움
     const TARGET=8;
@@ -844,7 +843,7 @@ async function genImages(p,out){
     }));
     const inlineReqs=[];
     for(const r of reqs){ const pts=[{text:r.text}]; for(const u of r.imgUrls) pts.push(await urlToPart(u));
-      inlineReqs.push({request:{contents:[{parts:pts}], generationConfig:{responseModalities:['IMAGE']}}}); }
+      inlineReqs.push({request:{contents:[{parts:pts}], generationConfig:{responseModalities:['IMAGE'], imageConfig:{aspectRatio:'3:4'}}}}); }
     setProg(out,70,'일괄 생성 요청 보내는 중...');
     const body={batch:{display_name:'dain-'+p.id+'-'+Date.now(), input_config:{requests:{requests:inlineReqs}}}};
     const r=await fetchR('https://generativelanguage.googleapis.com/v1beta/models/'+BATCH_MODEL+':batchGenerateContent?key='+encodeURIComponent(cfg.key),
@@ -1352,7 +1351,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-23-6';
+const APP_VER='2026-11-23-7';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
