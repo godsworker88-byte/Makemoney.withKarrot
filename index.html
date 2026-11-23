@@ -774,6 +774,20 @@ const BATCH_MODEL='gemini-3.1-flash-lite-image';
 function batchJobs(){ try{ return JSON.parse(localStorage.getItem('batch_jobs')||'[]'); }catch(e){ return []; } }
 function saveBatchJobs(a){ localStorage.setItem('batch_jobs', JSON.stringify(a)); }
 function b64ToBlob(b64,type){ const bin=atob(b64); const u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i); return new Blob([u8],{type:type||'image/png'}); }
+function blobToImg(b){ return new Promise((res,rej)=>{ const u=URL.createObjectURL(b); const im=new Image(); im.onload=()=>{URL.revokeObjectURL(u);res(im);}; im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('img'));}; im.src=u; }); }
+// 세로로 긴 생성컷을 잘리지 않게 정사각형으로(여백은 배경색으로 채움 — 아무것도 자르지 않음)
+async function padSquare(blob){
+  try{
+    const im=await blobToImg(blob); const side=Math.max(im.width,im.height);
+    if(Math.abs(im.width-im.height)<=2) return blob;
+    const c=document.createElement('canvas'); c.width=c.height=side; const x=c.getContext('2d');
+    const t=document.createElement('canvas'); t.width=im.width; t.height=im.height; const tx=t.getContext('2d'); tx.drawImage(im,0,0);
+    let fill='#f4f1ec'; try{ const d=tx.getImageData(1,1,1,1).data; fill='rgb('+d[0]+','+d[1]+','+d[2]+')'; }catch(e){}
+    x.fillStyle=fill; x.fillRect(0,0,side,side);
+    x.drawImage(im,(side-im.width)/2,(side-im.height)/2);
+    return await toBlob(c);
+  }catch(e){ return blob; }
+}
 // 원본 그대로 쓰는 컷(상세사이즈·디테일)은 API 없이 바로 만듦
 async function buildOriginals(job){
   const res=[];
@@ -795,7 +809,7 @@ function editPrompt(isModel, scene, ptype){
   const extra = isModel
     ? ' (3) 모델의 얼굴만 다른 한국인 여성 얼굴로 자연스럽게 교체(체형·포즈·손·'+prod+'의 위치는 그대로). (4) 함께 입은 '+other+'와 신발·가방·액세서리는 '+prod+'와 색이 겹치지 않는 다른 것으로 바꿔도 돼(단 '+prod+' 자체는 그대로).'
     : ' (3) 옷걸이/행거가 보이면 다른 디자인의 깔끔한 행거로 교체('+prod+'의 위치·각도·주름은 그대로).';
-  const frame = ' 결과는 정사각형(1:1) 구도로, '+prod+'가 잘리지 않고 전체가 다 보이게 담아줘'+(ptype==='하의'?'(바지는 밑단 끝까지 꼭 보이게, 다리가 잘리면 안 됨)':(ptype==='원피스'?'(원피스 밑단까지 다 보이게)':''))+'. 사진에 새 글자·로고·워터마크는 넣지 마.';
+  const frame = ' ★가장 중요: '+prod+'(옷)는 맨 윗부분부터 밑단·발끝까지 절대 잘리지 않고 전체가 100% 프레임 안에 다 들어와야 해'+(ptype==='하의'?' (바지라면 허리부터 발끝까지 전부, 다리·발이 잘리면 안 됨)':'')+'. 옷을 다 넣기 위해 필요하면 더 멀리서(줌아웃) 작게 담아도 되고, 사람의 머리·얼굴 윗부분은 프레임 밖으로 잘려도 괜찮아 — 옷만 다 보이면 돼. 세로로 긴 구도. 사진에 새 글자·로고·워터마크는 넣지 마.';
   return base+common+extra+frame;
 }
 function showPendingBatch(p,out,msg){
@@ -848,7 +862,7 @@ async function genImages(p,out){
     }));
     const inlineReqs=[];
     for(const r of reqs){ const pts=[{text:r.text}]; for(const u of r.imgUrls) pts.push(await urlToPart(u));
-      inlineReqs.push({request:{contents:[{parts:pts}], generationConfig:{responseModalities:['IMAGE'], imageConfig:{aspectRatio:'1:1'}}}}); }
+      inlineReqs.push({request:{contents:[{parts:pts}], generationConfig:{responseModalities:['IMAGE'], imageConfig:{aspectRatio:'3:4'}}}}); }
     setProg(out,70,'일괄 생성 요청 보내는 중...');
     const body={batch:{display_name:'dain-'+p.id+'-'+Date.now(), input_config:{requests:{requests:inlineReqs}}}};
     const r=await fetchR('https://generativelanguage.googleapis.com/v1beta/models/'+BATCH_MODEL+':batchGenerateContent?key='+encodeURIComponent(cfg.key),
@@ -875,13 +889,13 @@ async function checkBatch(job,p,out){
     const rr=j.response||{};
     const list=Array.isArray(rr.inlinedResponses)?rr.inlinedResponses:((rr.inlinedResponses||{}).inlinedResponses||[]);
     const results=[], fails=[];
-    job.names.forEach((nm,i)=>{ try{
+    for(let i=0;i<job.names.length;i++){ const nm=job.names[i]; try{
       const item=list[i]; const cand=((item.response||{}).candidates||[])[0]||{};
       const ps=(cand.content||{}).parts||[]; const ip=ps.find(x=>x.inlineData||x.inline_data);
       if(!ip) throw new Error('no image');
       const d=ip.inlineData||ip.inline_data;
-      results.push({name:nm, blob:b64ToBlob(d.data, d.mimeType||d.mime_type)});
-    }catch(e){ fails.push(nm); } });
+      results.push({name:nm, blob:await padSquare(b64ToBlob(d.data, d.mimeType||d.mime_type))});
+    }catch(e){ fails.push(nm); } }
     aiCountAdd(results.filter(r=>job.names.includes(r.name)).length);
     results.push(...(await buildOriginals(job)));
     saveStoredImgs(job.pid, results);
@@ -990,13 +1004,13 @@ async function pullBatchResults(job){
   const rr=j.response||{};
   const list=Array.isArray(rr.inlinedResponses)?rr.inlinedResponses:((rr.inlinedResponses||{}).inlinedResponses||[]);
   const results=[], fails=[];
-  job.names.forEach((nm,i)=>{ try{
+  for(let i=0;i<job.names.length;i++){ const nm=job.names[i]; try{
     const item=list[i]; const cand=((item.response||{}).candidates||[])[0]||{};
     const ps=(cand.content||{}).parts||[]; const ip=ps.find(x=>x.inlineData||x.inline_data);
     if(!ip) throw new Error('no image');
     const d=ip.inlineData||ip.inline_data;
-    results.push({name:nm, blob:b64ToBlob(d.data, d.mimeType||d.mime_type)});
-  }catch(e){ fails.push(nm); } });
+    results.push({name:nm, blob:await padSquare(b64ToBlob(d.data, d.mimeType||d.mime_type))});
+  }catch(e){ fails.push(nm); } }
   aiCountAdd(results.length);
   results.push(...(await buildOriginals(job)));
   if(results.length) saveStoredImgs(job.pid, results);
@@ -1356,7 +1370,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-23-9';
+const APP_VER='2026-11-23-10';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
