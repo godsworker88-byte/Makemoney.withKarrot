@@ -1280,17 +1280,18 @@ function sheetCfg(){ try{ const c=JSON.parse(localStorage.getItem('sheet_cfg'));
 function buildSheetPayload(){
   const done=sales.filter(r=>r.status!=='환불'&&r.status!=='취소');
   const salesHeader=['날짜','상품명','판매가','원가','배송비','기타','수수료(3.3%)','순이익','상태','결제','출고예정일','발송방법','발송메모','당근아이디'];
+  const cf=v=>num(v).toLocaleString('ko-KR');  // 세 자리 콤마
   const salesRows=sales.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(r=>[
-    r.date||'', r.name||'', num(r.price), num(r.cost), num(r.ship), num(r.etc), feeOf(r.price), salesMargin(r),
+    r.date||'', r.name||'', cf(r.price), cf(r.cost), cf(r.ship), cf(r.etc), cf(feeOf(r.price)), cf(salesMargin(r)),
     r.status||'', r.pay||'', r.shipDate||'', r.shipMethod||'', r.shipMemo||'', r.karrotId||'' ]);
   let s=0,cost=0,exp=0,profit=0; const by={};
   done.forEach(r=>{ s+=num(r.price); cost+=num(r.cost); exp+=num(r.ship)+num(r.etc)+feeOf(r.price); profit+=salesMargin(r);
     const m=(r.date||'').slice(0,7)||'-'; (by[m]=by[m]||{n:0,s:0,p:0}); by[m].n++; by[m].s+=num(r.price); by[m].p+=salesMargin(r); });
   let mIn=0,mOut=0; misc.forEach(m=>{ if(m.type==='in') mIn+=num(m.amount); else mOut+=num(m.amount); });
-  const miscRows=[['날짜','구분','내용','금액']].concat(misc.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(m=>[m.date||'', m.type==='in'?'수입':'지출', m.memo||'', (m.type==='in'?1:-1)*num(m.amount)]));
-  const statsRows=[['항목','값'],['총매출',s],['총순이익',profit],['총원가',cost],['총비용(배송+기타+수수료)',exp],['판매건수',done.length],
-    ['평균 마진율(%)', s?Number((profit/s*100).toFixed(1)):0],['기타수입',mIn],['기타지출',mOut],['최종 순이익(기타 포함)',profit+mIn-mOut],['업데이트', new Date().toLocaleString('ko-KR')],[],['월','건수','매출','순이익']]
-    .concat(Object.keys(by).sort().reverse().map(m=>[m,by[m].n,by[m].s,by[m].p]));
+  const miscRows=[['날짜','구분','내용','금액']].concat(misc.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(m=>[m.date||'', m.type==='in'?'수입':'지출', m.memo||'', cf((m.type==='in'?1:-1)*num(m.amount))]));
+  const statsRows=[['항목','값'],['총매출',cf(s)],['총순이익',cf(profit)],['총원가',cf(cost)],['총비용(배송+기타+수수료)',cf(exp)],['판매건수',done.length],
+    ['평균 마진율(%)', s?Number((profit/s*100).toFixed(1)):0],['기타수입',cf(mIn)],['기타지출',cf(mOut)],['최종 순이익(기타 포함)',cf(profit+mIn-mOut)],['업데이트', new Date().toLocaleString('ko-KR')],[],['월','건수','매출','순이익']]
+    .concat(Object.keys(by).sort().reverse().map(m=>[m,by[m].n,cf(by[m].s),cf(by[m].p)]));
   return { salesHeader, sales:salesRows, stats:statsRows, misc:miscRows };
 }
 function renderSheetStatus(){ const el=$('sheet-status'); if(el) el.textContent='마지막 업데이트 요청: '+(localStorage.getItem('sheet_last')||'없음'); }
@@ -1367,7 +1368,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-25-2';
+const APP_VER='2026-11-25-3';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
