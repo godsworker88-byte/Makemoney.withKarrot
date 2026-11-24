@@ -1371,7 +1371,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-24-3';
+const APP_VER='2026-11-24-4';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
@@ -1388,7 +1388,7 @@ document.querySelectorAll('[data-ext]').forEach(b=>{ b.onclick=()=>window.open(b
 // 둘러보기(카탈로그)
 let brLoaded=false, brMode='new', brSite='secretroot', brQuery='', brCat='';
 // 시크릿루트 카테고리 [이름, 페이지번호] — 번호 받는 대로 추가
-const SR_CATS=[['전체',''],['아우터','19']];
+const SR_CATS=[['전체',''],['아우터','19'],['가방','20']];
 const BR_HOME={secretroot:'https://secretroot.imweb.me/', jycompany:'https://jycompany.co/'};
 async function renderBrowse(force){
   const g=$('br-grid'); if(!g) return;
