@@ -1275,7 +1275,8 @@ $('ai-provider').onchange=()=>$('ai-model').placeholder=$('ai-provider').value==
 idbLoadAll().then(m=>{ imgStore=m; renderProducts(); }).catch(()=>{});
 renderAiUsage();
 // ---- 구글 시트 자동 업데이트 (판매 기록 + 통계) ----
-function sheetCfg(){ try{ return JSON.parse(localStorage.getItem('sheet_cfg'))||{}; }catch(e){ return {}; } }
+const SHEET_DEFAULT={url:'https://script.google.com/macros/s/AKfycbyM7dvczp9xNFFXikH_grwqGbsRzXfqHGlGV6GMUUMRK2UWM6cr-_6_l-jLEIRgFa4tBw/exec', token:'dain2026'};
+function sheetCfg(){ try{ const c=JSON.parse(localStorage.getItem('sheet_cfg')); if(c&&c.url) return c; }catch(e){} return SHEET_DEFAULT; }
 function buildSheetPayload(){
   const done=sales.filter(r=>r.status!=='환불'&&r.status!=='취소');
   const salesHeader=['날짜','상품명','판매가','원가','배송비','기타','수수료(3.3%)','순이익','상태','결제','출고예정일','발송방법','발송메모','당근아이디'];
@@ -1308,7 +1309,7 @@ async function syncSheet(manual){
 }
 $('sheet-save').onclick=()=>{ localStorage.setItem('sheet_cfg',JSON.stringify({url:$('sheet-url').value.trim(), token:$('sheet-token').value.trim()})); toast('저장했어요'); renderSheetStatus(); };
 $('sheet-now').onclick=()=>syncSheet(true);
-(function(){ const c=sheetCfg(); $('sheet-url').value=c.url||''; $('sheet-token').value=c.token||''; renderSheetStatus(); })();
+(function(){ const c=sheetCfg(); $('sheet-url').value=c.url||''; $('sheet-token').value=c.token||''; renderSheetStatus(); if((sales&&sales.length)||(misc&&misc.length)) setTimeout(()=>syncSheet(false),2000); })();
 $('ai-save').onclick=()=>{ localStorage.setItem('ai_cfg',JSON.stringify({provider:$('ai-provider').value,key:$('ai-key').value.trim(),model:$('ai-model').value.trim()})); const s=$('ai-saved'); s.textContent='✓ 저장됨'; setTimeout(()=>s.textContent='',1500); };
 
 // =========================================================
@@ -1366,7 +1367,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-25-1';
+const APP_VER='2026-11-25-2';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
