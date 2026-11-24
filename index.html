@@ -258,14 +258,14 @@
             <div class="hint" id="ai-usage" style="margin-top:8px"></div>
           </div>
         </details>
-        <details style="margin-top:12px"><summary class="hint">📊 구글 시트 자동 업데이트 (판매·통계)</summary>
-          <div class="card" style="margin-top:8px">
-            <label class="f">웹앱 주소<input type="text" id="sheet-url" placeholder="https://script.google.com/macros/s/.../exec"></label>
-            <label class="f">비밀 토큰<input type="password" id="sheet-token" placeholder="스크립트에 적은 TOKEN과 같은 값"></label>
-            <button class="ghost sm" id="sheet-save">저장</button> <button class="ghost sm" id="sheet-now">지금 업데이트</button>
-            <div class="hint" id="sheet-status" style="margin-top:8px"></div>
-          </div>
-        </details>
+      </div>
+    </details>
+    <details class="card"><summary class="hint">📊 구글 시트 자동 업데이트 (판매·통계)</summary>
+      <div class="mt">
+        <label class="f">웹앱 주소<input type="text" id="sheet-url" placeholder="https://script.google.com/macros/s/.../exec"></label>
+        <label class="f">비밀 토큰<input type="password" id="sheet-token" placeholder="스크립트에 적은 TOKEN과 같은 값"></label>
+        <button class="ghost sm" id="sheet-save">저장</button> <button class="ghost sm" id="sheet-now">지금 업데이트</button>
+        <div class="hint" id="sheet-status" style="margin-top:8px"></div>
       </div>
     </details>
 
@@ -1366,7 +1366,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-24-7';
+const APP_VER='2026-11-25-1';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
