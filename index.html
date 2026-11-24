@@ -639,7 +639,7 @@ ${goods?'\n★ 이 상품은 의류가 아닌 잡화·생활용품이야: 사이
 
 [제목 규칙]
 - 제목은 상품의 특징적 키워드를 최대한 나열해(브랜드·소재·디자인 디테일·핏·색상·용도 등 사진에서 확인되는 것 위주, 검색되는 단어 중심).
-- 제목에 '(새상품)'은 넣지 않아도 돼. 넣으면 키워드 자리를 줄이니 생략을 기본으로 해.
+- 제목은 반드시 '[새상품] '으로 시작해. 그 뒤에 특징 키워드를 나열해.
 - 40자 이내, 제목 표현도 매번 조금씩 다르게(키워드 순서 변화).
 
 [상세설명 틀] (해당 없는 줄은 생략, 이모지 적절히, 위 '다양성 규칙'의 톤 반영)
@@ -1370,7 +1370,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-23-10';
+const APP_VER='2026-11-24-1';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
