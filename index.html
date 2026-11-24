@@ -650,7 +650,7 @@ ${goods?'\n★ 이 상품은 의류가 아닌 잡화·생활용품이야: 사이
 ${price?'✨ 가격: '+Number(price).toLocaleString()+'원':'(가격 줄 생략)'}
 색상 : [사진에서 보이는 색상만, 줄바꿈 없이 한 줄에 쉼표로 나열. 예: 색상 : 베이지, 차콜]
 (아래 사이즈 줄은 의류 등 사이즈 품목일 때만, 아니면 생략)
-사이즈 : 상세 실측 사이즈는 사이즈(실측) 이미지 참고
+사이즈 : [사이즈 표기. 단일/프리사이즈면 'Free', 여러 사이즈면 'M,L,XL'처럼 쉼표로 나열] (실측 사이즈는 맨 마지막 사진 참고하세요)
 소재: [사진으로 명확한 소재만, 모르면 이 줄 생략]
 
 [거래·배송 안내 — 아래 '사실 3가지'는 반드시 모두 포함하되, 제목·문장·이모지 표현은 매번 다르게 써(똑같은 틀 반복 금지). 비착용 품목이면 '미착용'은 빼]
@@ -1370,7 +1370,7 @@ $('p-search').oninput=()=>{ pSearch=$('p-search').value; renderProducts(); };
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
 // 새 버전 자동 감지 → 새로고침 (옛 코드가 남아있는 문제 방지)
-const APP_VER='2026-11-24-1';
+const APP_VER='2026-11-24-2';
 async function checkVer(){
   try{ const r=await fetch('./ver.json?t='+Date.now(),{cache:'no-store'}); const j=await r.json();
     if(j && j.v && j.v!==APP_VER && !sessionStorage.getItem('vr_'+j.v)){
