@@ -87,9 +87,10 @@ function parseJYHtml(h) {
 }
 // ---- 검색 (둘러보기 검색창) ----
 // 시크릿루트: /search?type=&keyword=  /  JYCompany: /products?search=
-async function searchSR(q) {
-  const r = await fetch('https://secretroot.imweb.me/search?type=&keyword=' + encodeURIComponent(q), { headers: UA });
-  if (!r.ok) throw new Error('검색 ' + r.status);
+// 시크릿루트 리스트 페이지(검색/카테고리)에서 상품 카드 파싱 + 이름 채움
+async function listPageSR(url) {
+  const r = await fetch(url, { headers: UA });
+  if (!r.ok) throw new Error('목록 ' + r.status);
   const h = await r.text();
   let items = parseHome(h);
   if (!items.length) {  // 카드 마크업이 달라도 상품 링크+이미지를 넓게 잡는 예비 파싱
@@ -99,11 +100,13 @@ async function searchSR(q) {
       seen.add(m[1]); items.push({ idx: m[1], url: HOME + '?idx=' + m[1], thumb: m[2], name: '' });
     }
   }
-  // 이름이 비어 있는 항목은 상품 페이지에서 이름을 읽어 채움 (최대 24개)
   const need = items.filter(i => !i.name).slice(0, 24);
   const got = await Promise.all(need.map(i => prod(i.idx)));
   need.forEach((i, k) => { if (got[k] && got[k].name) i.name = got[k].name; });
   return items.slice(0, 40);
+}
+async function searchSR(q) {
+  return listPageSR('https://secretroot.imweb.me/search?type=&keyword=' + encodeURIComponent(q));
 }
 async function searchJY(q) {
   const r = await fetch('https://jycompany.co/products?search=' + encodeURIComponent(q), { headers: UA });
@@ -120,6 +123,12 @@ module.exports = async (req, res) => {
     const site = (req.query && req.query.site) || 'secretroot';
     const mode = (req.query && req.query.mode) || 'new';
     const q = ((req.query && req.query.q) || '').toString().trim().slice(0, 40);
+    const cat = ((req.query && req.query.cat) || '').toString().replace(/[^0-9a-zA-Z_\-\/]/g, '').slice(0, 40);
+    if (site === 'secretroot' && cat) {
+      let items = await listPageSR(HOME + cat);
+      if (mode === 'random') items = shuffle(items);
+      return res.status(200).json({ site, mode, cat, count: items.length, items, error: items.length ? undefined : '이 카테고리에 상품이 없어요' });
+    }
     if (q) {
       const items = site === 'jycompany' ? await searchJY(q) : await searchSR(q);
       return res.status(200).json({ site, mode: 'search', q, count: items.length, items, error: items.length ? undefined : '검색 결과가 없어요' });
